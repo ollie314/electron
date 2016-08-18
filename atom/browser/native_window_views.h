@@ -68,6 +68,7 @@ class NativeWindowViews : public NativeWindow,
   bool IsFullscreen() const override;
   void SetBounds(const gfx::Rect& bounds, bool animate) override;
   gfx::Rect GetBounds() override;
+  gfx::Rect GetContentBounds() override;
   gfx::Size GetContentSize() override;
   void SetContentSizeConstraints(
       const extensions::SizeConstraints& size_constraints) override;
@@ -103,7 +104,7 @@ class NativeWindowViews : public NativeWindow,
   gfx::NativeWindow GetNativeWindow() override;
   void SetOverlayIcon(const gfx::Image& overlay,
                       const std::string& description) override;
-  void SetProgressBar(double value) override;
+  void SetProgressBar(double progress, const ProgressState state) override;
   void SetAutoHideMenuBar(bool auto_hide) override;
   bool IsMenuBarAutoHide() override;
   void SetMenuBarVisibility(bool visible) override;
@@ -164,8 +165,8 @@ class NativeWindowViews : public NativeWindow,
 #endif
 
   // NativeWindow:
-  gfx::Size ContentSizeToWindowSize(const gfx::Size& size) override;
-  gfx::Size WindowSizeToContentSize(const gfx::Size& size) override;
+  gfx::Rect ContentBoundsToWindowBounds(const gfx::Rect& bounds) override;
+  gfx::Rect WindowBoundsToContentBounds(const gfx::Rect& bounds) override;
   void HandleKeyboardEvent(
       content::WebContents*,
       const content::NativeWebKeyboardEvent& event) override;
@@ -213,6 +214,16 @@ class NativeWindowViews : public NativeWindow,
   // size of the window while in the normal state (not maximized, minimized or
   // fullscreen), so we restore it correctly.
   gfx::Rect last_normal_bounds_;
+
+  // last_normal_bounds_ may or may not require update on WM_MOVE. When a
+  // window is maximized, it is moved (WM_MOVE) to maximum size first and then
+  // sized (WM_SIZE). In this case, last_normal_bounds_ should not update. We
+  // keep last_normal_bounds_candidate_ as a candidate which will become valid
+  // last_normal_bounds_ if the moves are consecutive with no WM_SIZE event in
+  // between.
+  gfx::Rect last_normal_bounds_candidate_;
+
+  bool consecutive_moves_;
 
   // In charge of running taskbar related APIs.
   TaskbarHost taskbar_host_;

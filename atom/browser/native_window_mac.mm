@@ -160,7 +160,7 @@ bool ScopedDisableResize::disable_resize_ = false;
 
 - (void)windowDidMove:(NSNotification*)notification {
   // TODO(zcbenz): Remove the alias after figuring out a proper
-  // way to disptach move.
+  // way to dispatch move.
   shell_->NotifyWindowMove();
   shell_->NotifyWindowMoved();
 }
@@ -321,6 +321,13 @@ bool ScopedDisableResize::disable_resize_ = false;
     return [super constrainFrameRect:frameRect toScreen:screen];
 }
 
+- (void)setFrame:(NSRect)windowFrame display:(BOOL)displayViews {
+  // constrainFrameRect is not called on hidden windows so disable adjusting
+  // the frame directly when resize is disabled
+  if (!ScopedDisableResize::IsResizeDisabled())
+    [super setFrame:windowFrame display:displayViews];
+}
+
 - (id)accessibilityAttributeValue:(NSString*)attribute {
   if (![attribute isEqualToString:@"AXChildren"])
     return [super accessibilityAttributeValue:attribute];
@@ -416,7 +423,11 @@ struct Converter<atom::NativeWindowMac::TitleBarStyle> {
       *out = atom::NativeWindowMac::HIDDEN;
     } else if (title_bar_style == "hidden-inset" ||  // Deprecate this after 2.0
                title_bar_style == "hiddenInset") {
-      *out = atom::NativeWindowMac::HIDDEN_INSET;
+      if (base::mac::IsOSYosemiteOrLater()) {
+        *out = atom::NativeWindowMac::HIDDEN_INSET;
+      } else {
+        *out = atom::NativeWindowMac::HIDDEN;
+      }
     } else {
       return false;
     }
@@ -435,7 +446,8 @@ NativeWindowMac::NativeWindowMac(
     : NativeWindow(web_contents, options, parent),
       is_kiosk_(false),
       attention_request_id_(0),
-      title_bar_style_(NORMAL) {
+      title_bar_style_(NORMAL),
+      is_edge_(false) {
   int width = 800, height = 600;
   options.Get(options::kWidth, &width);
   options.Get(options::kHeight, &height);
@@ -459,9 +471,7 @@ NativeWindowMac::NativeWindowMac(
   bool closable = true;
   options.Get(options::kClosable, &closable);
 
-  // New title bar styles are available in Yosemite or newer
-  if (base::mac::IsOSYosemiteOrLater())
-    options.Get(options::kTitleBarStyle, &title_bar_style_);
+  options.Get(options::kTitleBarStyle, &title_bar_style_);
 
   std::string windowType;
   options.Get(options::kType, &windowType);
@@ -577,25 +587,28 @@ NativeWindowMac::NativeWindowMac(
       if (!web_contents)
         return event;
 
-      if (!began && (([event phase] == NSEventPhaseMayBegin) ||
-                     ([event phase] == NSEventPhaseBegan))) {
+      if (!began && is_edge_ && (([event phase] == NSEventPhaseMayBegin) ||
+                                 ([event phase] == NSEventPhaseBegan))) {
         this->NotifyWindowScrollTouchBegin();
         began = YES;
+        is_edge_ = false;
       } else if (began && (([event phase] == NSEventPhaseEnded) ||
                            ([event phase] == NSEventPhaseCancelled))) {
         this->NotifyWindowScrollTouchEnd();
         began = NO;
+        is_edge_ = false;
       }
       return event;
   }];
 
   InstallView();
 
-  // Disable zoom button if window is not resizable.
   // Set maximizable state last to ensure zoom button does not get reset
   // by calls to other APIs.
-  if (!maximizable)
-    SetMaximizable(false);
+  SetMaximizable(maximizable);
+
+  RegisterInputEventObserver(
+      web_contents->GetWebContents()->GetRenderViewHost());
 }
 
 NativeWindowMac::~NativeWindowMac() {
@@ -780,9 +793,6 @@ void NativeWindowMac::SetContentSizeConstraints(
 }
 
 void NativeWindowMac::SetResizable(bool resizable) {
-  // Change styleMask for frameless causes the window to change size, so we have
-  // to explicitly disables that.
-  ScopedDisableResize disable_resize;
   SetStyleMask(resizable, NSResizableWindowMask);
 }
 
@@ -975,7 +985,7 @@ gfx::AcceleratedWidget NativeWindowMac::GetAcceleratedWidget() {
   return inspectable_web_contents()->GetView()->GetNativeView();
 }
 
-void NativeWindowMac::SetProgressBar(double progress) {
+void NativeWindowMac::SetProgressBar(double progress, const NativeWindow::ProgressState state) {
   NSDockTile* dock_tile = [NSApp dockTile];
 
   // For the first time API invoked, we need to create a ContentView in DockTile.
@@ -1026,6 +1036,25 @@ bool NativeWindowMac::IsVisibleOnAllWorkspaces() {
   return collectionBehavior & NSWindowCollectionBehaviorCanJoinAllSpaces;
 }
 
+void NativeWindowMac::OnInputEvent(const blink::WebInputEvent& event) {
+  switch (event.type) {
+    case blink::WebInputEvent::GestureScrollBegin:
+    case blink::WebInputEvent::GestureScrollUpdate:
+    case blink::WebInputEvent::GestureScrollEnd:
+      is_edge_ = true;
+      break;
+    default:
+      break;
+  }
+}
+
+void NativeWindowMac::RenderViewHostChanged(
+    content::RenderViewHost* old_host,
+    content::RenderViewHost* new_host) {
+  UnregisterInputEventObserver(old_host);
+  RegisterInputEventObserver(new_host);
+}
+
 std::vector<gfx::Rect> NativeWindowMac::CalculateNonDraggableRegions(
     const std::vector<DraggableRegion>& regions, int width, int height) {
   std::vector<gfx::Rect> result;
@@ -1043,22 +1072,30 @@ std::vector<gfx::Rect> NativeWindowMac::CalculateNonDraggableRegions(
   return result;
 }
 
-gfx::Size NativeWindowMac::ContentSizeToWindowSize(const gfx::Size& size) {
-  if (!has_frame())
-    return size;
-
-  NSRect content = NSMakeRect(0, 0, size.width(), size.height());
-  NSRect frame = [window_ frameRectForContentRect:content];
-  return gfx::Size(frame.size);
+gfx::Rect NativeWindowMac::ContentBoundsToWindowBounds(
+    const gfx::Rect& bounds) {
+  if (has_frame()) {
+    gfx::Rect window_bounds(
+        [window_ frameRectForContentRect:bounds.ToCGRect()]);
+    int frame_height = window_bounds.height() - bounds.height();
+    window_bounds.set_y(window_bounds.y() - frame_height);
+    return window_bounds;
+  } else {
+    return bounds;
+  }
 }
 
-gfx::Size NativeWindowMac::WindowSizeToContentSize(const gfx::Size& size) {
-  if (!has_frame())
-    return size;
-
-  NSRect frame = NSMakeRect(0, 0, size.width(), size.height());
-  NSRect content = [window_ contentRectForFrameRect:frame];
-  return gfx::Size(content.size);
+gfx::Rect NativeWindowMac::WindowBoundsToContentBounds(
+    const gfx::Rect& bounds) {
+  if (has_frame()) {
+    gfx::Rect content_bounds(
+        [window_ contentRectForFrameRect:bounds.ToCGRect()]);
+    int frame_height = bounds.height() - content_bounds.height();
+    content_bounds.set_y(content_bounds.y() + frame_height);
+    return content_bounds;
+  } else {
+    return bounds;
+  }
 }
 
 void NativeWindowMac::UpdateDraggableRegions(
@@ -1066,6 +1103,11 @@ void NativeWindowMac::UpdateDraggableRegions(
   NativeWindow::UpdateDraggableRegions(regions);
   draggable_regions_ = regions;
   UpdateDraggableRegionViews(regions);
+}
+
+void NativeWindowMac::ShowWindowButton(NSWindowButton button) {
+  auto view = [window_ standardWindowButton:button];
+  [view.superview addSubview:view positioned:NSWindowAbove relativeTo:nil];
 }
 
 void NativeWindowMac::InstallView() {
@@ -1096,8 +1138,15 @@ void NativeWindowMac::InstallView() {
     // The fullscreen button should always be hidden for frameless window.
     [[window_ standardWindowButton:NSWindowFullScreenButton] setHidden:YES];
 
-    if (title_bar_style_ != NORMAL)
+    if (title_bar_style_ != NORMAL) {
+      if (base::mac::IsOSMavericks()) {
+        ShowWindowButton(NSWindowZoomButton);
+        ShowWindowButton(NSWindowMiniaturizeButton);
+        ShowWindowButton(NSWindowCloseButton);
+      }
+
       return;
+    }
 
     // Hide the window buttons.
     [[window_ standardWindowButton:NSWindowZoomButton] setHidden:YES];
@@ -1128,7 +1177,9 @@ void NativeWindowMac::UpdateDraggableRegionViews(
   NSInteger webViewWidth = NSWidth([webView bounds]);
   NSInteger webViewHeight = NSHeight([webView bounds]);
 
-  [webView setMouseDownCanMoveWindow:YES];
+  if ([webView respondsToSelector:@selector(setMouseDownCanMoveWindow:)]) {
+    [webView setMouseDownCanMoveWindow:YES];
+  }
 
   // Remove all ControlRegionViews that are added last time.
   // Note that [webView subviews] returns the view's mutable internal array and
@@ -1168,27 +1219,41 @@ void NativeWindowMac::UpdateDraggableRegionViews(
 }
 
 void NativeWindowMac::SetStyleMask(bool on, NSUInteger flag) {
-  bool zoom_button_enabled = IsMaximizable();
+  // Changing the styleMask of a frameless windows causes it to change size so
+  // we explicitly disable resizing while setting it.
+  ScopedDisableResize disable_resize;
+
+  bool was_maximizable = IsMaximizable();
   if (on)
     [window_ setStyleMask:[window_ styleMask] | flag];
   else
     [window_ setStyleMask:[window_ styleMask] & (~flag)];
   // Change style mask will make the zoom button revert to default, probably
   // a bug of Cocoa or macOS.
-  if (!zoom_button_enabled)
-    SetMaximizable(false);
+  SetMaximizable(was_maximizable);
 }
 
 void NativeWindowMac::SetCollectionBehavior(bool on, NSUInteger flag) {
-  bool zoom_button_enabled = IsMaximizable();
+  bool was_maximizable = IsMaximizable();
   if (on)
     [window_ setCollectionBehavior:[window_ collectionBehavior] | flag];
   else
     [window_ setCollectionBehavior:[window_ collectionBehavior] & (~flag)];
   // Change collectionBehavior will make the zoom button revert to default,
   // probably a bug of Cocoa or macOS.
-  if (!zoom_button_enabled)
-    SetMaximizable(false);
+  SetMaximizable(was_maximizable);
+}
+
+void NativeWindowMac::RegisterInputEventObserver(
+    content::RenderViewHost* host) {
+  if (host)
+    host->GetWidget()->AddInputEventObserver(this);
+}
+
+void NativeWindowMac::UnregisterInputEventObserver(
+    content::RenderViewHost* host) {
+  if (host)
+    host->GetWidget()->RemoveInputEventObserver(this);
 }
 
 // static

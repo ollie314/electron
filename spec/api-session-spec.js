@@ -2,6 +2,7 @@ const assert = require('assert')
 const http = require('http')
 const path = require('path')
 const fs = require('fs')
+const {closeWindow} = require('./window-helpers')
 
 const {ipcRenderer, remote} = require('electron')
 const {ipcMain, session, BrowserWindow} = remote
@@ -14,9 +15,6 @@ describe('session module', function () {
   var url = 'http://127.0.0.1'
 
   beforeEach(function () {
-    if (w != null) {
-      w.destroy()
-    }
     w = new BrowserWindow({
       show: false,
       width: 400,
@@ -25,10 +23,7 @@ describe('session module', function () {
   })
 
   afterEach(function () {
-    if (w != null) {
-      w.destroy()
-    }
-    w = null
+    return closeWindow(w).then(function () { w = null })
   })
 
   describe('session.defaultSession', function () {
@@ -158,6 +153,32 @@ describe('session module', function () {
         })
       })
     })
+
+    it('should set cookie for standard scheme', function (done) {
+      const standardScheme = remote.getGlobal('standardScheme')
+      const origin = standardScheme + '://fake-host'
+      session.defaultSession.cookies.set({
+        url: origin,
+        name: 'custom',
+        value: '1'
+      }, function (error) {
+        if (error) {
+          return done(error)
+        }
+        session.defaultSession.cookies.get({
+          url: origin
+        }, function (error, list) {
+          if (error) {
+            return done(error)
+          }
+          assert.equal(list.length, 1)
+          assert.equal(list[0].name, 'custom')
+          assert.equal(list[0].value, '1')
+          assert.equal(list[0].domain, 'fake-host')
+          done()
+        })
+      })
+    })
   })
 
   describe('ses.clearStorageData(options)', function () {
@@ -194,7 +215,7 @@ describe('session module', function () {
     })
 
     afterEach(function () {
-      w.destroy()
+      return closeWindow(w).then(function () { w = null })
     })
 
     it('can cancel default download behavior', function (done) {
@@ -239,9 +260,10 @@ describe('session module', function () {
       res.end(mockPDF)
       downloadServer.close()
     })
-    var assertDownload = function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port) {
+    var assertDownload = function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port, savePath) {
       assert.equal(state, 'completed')
       assert.equal(filename, 'mock.pdf')
+      assert.equal(savePath, path.join(__dirname, 'fixtures', 'mock.pdf'))
       assert.equal(url, 'http://127.0.0.1:' + port + '/')
       assert.equal(mimeType, 'application/pdf')
       assert.equal(receivedBytes, mockPDF.length)
@@ -256,8 +278,8 @@ describe('session module', function () {
         var port = downloadServer.address().port
         ipcRenderer.sendSync('set-download-option', false, false)
         w.loadURL(url + ':' + port)
-        ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename) {
-          assertDownload(event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port)
+        ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, savePath) {
+          assertDownload(event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port, savePath)
           done()
         })
       })
@@ -272,8 +294,8 @@ describe('session module', function () {
         webview.addEventListener('did-finish-load', function () {
           webview.downloadURL(url + ':' + port + '/')
         })
-        ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename) {
-          assertDownload(event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port)
+        ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, savePath) {
+          assertDownload(event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename, port, savePath)
           document.body.removeChild(webview)
           done()
         })
@@ -340,6 +362,33 @@ describe('session module', function () {
         done()
       })
       w.loadURL(`${protocolName}://fake-host`)
+    })
+  })
+
+  describe('ses.setProxy(options, callback)', function () {
+    it('allows configuring proxy settings', function (done) {
+      const config = {
+        proxyRules: 'http=myproxy:80'
+      }
+      session.defaultSession.setProxy(config, function () {
+        session.defaultSession.resolveProxy('http://localhost', function (proxy) {
+          assert.equal(proxy, 'PROXY myproxy:80')
+          done()
+        })
+      })
+    })
+
+    it('allows bypassing proxy settings', function (done) {
+      const config = {
+        proxyRules: 'http=myproxy:80',
+        proxyBypassRules: '<local>'
+      }
+      session.defaultSession.setProxy(config, function () {
+        session.defaultSession.resolveProxy('http://localhost', function (proxy) {
+          assert.equal(proxy, 'DIRECT')
+          done()
+        })
+      })
     })
   })
 })

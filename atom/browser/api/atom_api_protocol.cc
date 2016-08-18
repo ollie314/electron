@@ -29,6 +29,9 @@ namespace api {
 
 namespace {
 
+// List of registered custom standard schemes.
+std::vector<std::string> g_standard_schemes;
+
 // Clear protocol handlers in IO thread.
 void ClearJobFactoryInIO(
     scoped_refptr<brightray::URLRequestContextGetter> request_context_getter) {
@@ -39,9 +42,25 @@ void ClearJobFactoryInIO(
 
 }  // namespace
 
+std::vector<std::string> GetStandardSchemes() {
+  return g_standard_schemes;
+}
+
+void RegisterStandardSchemes(const std::vector<std::string>& schemes) {
+  g_standard_schemes = schemes;
+
+  auto* policy = content::ChildProcessSecurityPolicy::GetInstance();
+  for (const std::string& scheme : schemes) {
+    url::AddStandardScheme(scheme.c_str(), url::SCHEME_WITHOUT_PORT);
+    policy->RegisterWebSafeScheme(scheme);
+  }
+
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      atom::switches::kStandardSchemes, base::JoinString(schemes, ","));
+}
+
 Protocol::Protocol(v8::Isolate* isolate, AtomBrowserContext* browser_context)
-    : request_context_getter_(static_cast<brightray::URLRequestContextGetter*>(
-          browser_context->GetRequestContext())),
+    : request_context_getter_(browser_context->GetRequestContext()),
       weak_factory_(this) {
   Init(isolate);
 }
@@ -161,8 +180,9 @@ mate::Handle<Protocol> Protocol::Create(
 
 // static
 void Protocol::BuildPrototype(
-    v8::Isolate* isolate, v8::Local<v8::ObjectTemplate> prototype) {
-  mate::ObjectTemplateBuilder(isolate, prototype)
+    v8::Isolate* isolate, v8::Local<v8::FunctionTemplate> prototype) {
+  prototype->SetClassName(mate::StringToV8(isolate, "Protocol"));
+  mate::ObjectTemplateBuilder(isolate, prototype->PrototypeTemplate())
       .SetMethod("registerServiceWorkerSchemes",
                  &Protocol::RegisterServiceWorkerSchemes)
       .SetMethod("registerStringProtocol",
@@ -200,15 +220,7 @@ void RegisterStandardSchemes(
     return;
   }
 
-  auto policy = content::ChildProcessSecurityPolicy::GetInstance();
-  for (const auto& scheme : schemes) {
-    url::AddStandardScheme(scheme.c_str(), url::SCHEME_WITHOUT_PORT);
-    policy->RegisterWebSafeScheme(scheme);
-  }
-
-  auto command_line = base::CommandLine::ForCurrentProcess();
-  command_line->AppendSwitchASCII(atom::switches::kStandardSchemes,
-                                  base::JoinString(schemes, ","));
+  atom::api::RegisterStandardSchemes(schemes);
 }
 
 void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value> unused,
@@ -216,6 +228,7 @@ void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value> unused,
   v8::Isolate* isolate = context->GetIsolate();
   mate::Dictionary dict(isolate, exports);
   dict.SetMethod("registerStandardSchemes", &RegisterStandardSchemes);
+  dict.SetMethod("getStandardSchemes", &atom::api::GetStandardSchemes);
 }
 
 }  // namespace

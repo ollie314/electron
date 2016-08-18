@@ -2,6 +2,7 @@
 
 const assert = require('assert')
 const path = require('path')
+const {closeWindow} = require('./window-helpers')
 
 const {ipcRenderer, remote} = require('electron')
 const {ipcMain, webContents, BrowserWindow} = remote
@@ -16,6 +17,12 @@ const comparePaths = function (path1, path2) {
 
 describe('ipc module', function () {
   var fixtures = path.join(__dirname, 'fixtures')
+
+  var w = null
+
+  afterEach(function () {
+    return closeWindow(w).then(function () { w = null })
+  })
 
   describe('remote.require', function () {
     it('should returns same object for the same module', function () {
@@ -142,19 +149,24 @@ describe('ipc module', function () {
   })
 
   describe('remote value in browser', function () {
-    var print = path.join(fixtures, 'module', 'print_name.js')
+    const print = path.join(fixtures, 'module', 'print_name.js')
+    const printName = remote.require(print)
 
     it('keeps its constructor name for objects', function () {
-      var buf = new Buffer('test')
-      var printName = remote.require(print)
+      const buf = new Buffer('test')
       assert.equal(printName.print(buf), 'Buffer')
     })
 
     it('supports instanceof Date', function () {
-      var now = new Date()
-      var printName = remote.require(print)
+      const now = new Date()
       assert.equal(printName.print(now), 'Date')
       assert.deepEqual(printName.echo(now), now)
+    })
+
+    it('supports TypedArray', function () {
+      const values = [1, 2, 3, 4]
+      const typedArray = printName.typedArray(values)
+      assert.deepEqual(values, typedArray)
     })
   })
 
@@ -282,6 +294,15 @@ describe('ipc module', function () {
       })
       ipcRenderer.send('message', currentDate)
     })
+
+    it('can send objects with DOM class prototypes', function (done) {
+      ipcRenderer.once('message', function (event, value) {
+        assert.equal(value.protocol, 'file:')
+        assert.equal(value.hostname, '')
+        done()
+      })
+      ipcRenderer.send('message', document.location)
+    })
   })
 
   describe('ipc.sendSync', function () {
@@ -297,19 +318,18 @@ describe('ipc module', function () {
     it('does not crash when reply is not sent and browser is destroyed', function (done) {
       this.timeout(10000)
 
-      var w = new BrowserWindow({
+      w = new BrowserWindow({
         show: false
       })
       ipcMain.once('send-sync-message', function (event) {
         event.returnValue = null
-        w.destroy()
         done()
       })
       w.loadURL('file://' + path.join(fixtures, 'api', 'send-sync-message.html'))
     })
 
     it('does not crash when reply is sent by multiple listeners', function (done) {
-      var w = new BrowserWindow({
+      w = new BrowserWindow({
         show: false
       })
       ipcMain.on('send-sync-message', function (event) {
@@ -317,7 +337,6 @@ describe('ipc module', function () {
       })
       ipcMain.on('send-sync-message', function (event) {
         event.returnValue = null
-        w.destroy()
         done()
       })
       w.loadURL('file://' + path.join(fixtures, 'api', 'send-sync-message.html'))
@@ -349,12 +368,6 @@ describe('ipc module', function () {
   })
 
   describe('remote listeners', function () {
-    var w = null
-
-    afterEach(function () {
-      w.destroy()
-    })
-
     it('can be added and removed correctly', function () {
       w = new BrowserWindow({
         show: false

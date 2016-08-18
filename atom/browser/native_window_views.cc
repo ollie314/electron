@@ -23,7 +23,6 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/hit_test.h"
 #include "ui/gfx/image/image.h"
-#include "ui/gfx/screen.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 #include "ui/views/controls/webview/webview.h"
@@ -52,7 +51,9 @@
 #include "atom/browser/ui/win/atom_desktop_window_tree_host_win.h"
 #include "skia/ext/skia_utils_win.h"
 #include "ui/base/win/shell.h"
-#include "ui/gfx/win/dpi.h"
+#include "ui/display/win/screen_win.h"
+#include "ui/display/display.h"
+#include "ui/display/screen.h"
 #include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
 #endif
 
@@ -315,7 +316,7 @@ NativeWindowViews::NativeWindowViews(
   if (has_frame() &&
       options.Get(options::kUseContentSize, &use_content_size_) &&
       use_content_size_)
-    size = ContentSizeToWindowSize(size);
+    size = ContentBoundsToWindowBounds(gfx::Rect(size)).size();
 
   window_->CenterWindow(size);
   Layout();
@@ -348,6 +349,10 @@ void NativeWindowViews::CloseImmediately() {
 }
 
 void NativeWindowViews::Focus(bool focus) {
+  // For hidden window focus() should do nothing.
+  if (!IsVisible())
+    return;
+
   if (focus) {
 #if defined(OS_WIN)
     window_->Activate();
@@ -424,7 +429,7 @@ void NativeWindowViews::Maximize() {
   if (!thick_frame_) {
     restore_bounds_ = GetBounds();
     auto display =
-        gfx::Screen::GetScreen()->GetDisplayNearestPoint(GetPosition());
+        display::Screen::GetScreen()->GetDisplayNearestPoint(GetPosition());
     SetBounds(display.work_area(), false);
     return;
   }
@@ -487,7 +492,7 @@ void NativeWindowViews::SetFullScreen(bool fullscreen) {
     if (fullscreen) {
       restore_bounds_ = GetBounds();
       auto display =
-          gfx::Screen::GetScreen()->GetDisplayNearestPoint(GetPosition());
+          display::Screen::GetScreen()->GetDisplayNearestPoint(GetPosition());
       SetBounds(display.bounds(), false);
     } else {
       SetBounds(restore_bounds_, false);
@@ -537,6 +542,10 @@ gfx::Rect NativeWindowViews::GetBounds() {
 #endif
 
   return window_->GetWindowBoundsInScreen();
+}
+
+gfx::Rect NativeWindowViews::GetContentBounds() {
+  return web_view_->GetBoundsInScreen();
 }
 
 gfx::Size NativeWindowViews::GetContentSize() {
@@ -717,10 +726,12 @@ void NativeWindowViews::SetSkipTaskbar(bool skip) {
                                     CLSCTX_INPROC_SERVER)) ||
       FAILED(taskbar->HrInit()))
     return;
-  if (skip)
+  if (skip) {
     taskbar->DeleteTab(GetAcceleratedWidget());
-  else
+  } else {
     taskbar->AddTab(GetAcceleratedWidget());
+    taskbar_host_.RestoreThumbarButtons(GetAcceleratedWidget());
+  }
 #elif defined(USE_X11)
   SetWMSpecState(GetAcceleratedWidget(), skip,
                  GetAtom("_NET_WM_STATE_SKIP_TASKBAR"));
@@ -895,9 +906,10 @@ gfx::NativeWindow NativeWindowViews::GetNativeWindow() {
   return window_->GetNativeWindow();
 }
 
-void NativeWindowViews::SetProgressBar(double progress) {
+void NativeWindowViews::SetProgressBar(
+    double progress, NativeWindow::ProgressState state) {
 #if defined(OS_WIN)
-  taskbar_host_.SetProgressBar(GetAcceleratedWidget(), progress);
+  taskbar_host_.SetProgressBar(GetAcceleratedWidget(), progress, state);
 #elif defined(USE_X11)
   if (unity::IsRunning()) {
     unity::SetProgressFraction(progress);
@@ -1141,45 +1153,53 @@ void NativeWindowViews::OnWidgetMove() {
   NotifyWindowMove();
 }
 
-gfx::Size NativeWindowViews::ContentSizeToWindowSize(const gfx::Size& size) {
+gfx::Rect NativeWindowViews::ContentBoundsToWindowBounds(
+    const gfx::Rect& bounds) {
   if (!has_frame())
-    return size;
+    return bounds;
 
-  gfx::Size window_size(size);
+  gfx::Rect window_bounds(bounds);
 #if defined(OS_WIN)
-  gfx::Rect dpi_bounds =
-      gfx::Rect(gfx::Point(), gfx::win::DIPToScreenSize(size));
-  gfx::Rect window_bounds = gfx::win::ScreenToDIPRect(
+  HWND hwnd = GetAcceleratedWidget();
+  gfx::Rect dpi_bounds = display::win::ScreenWin::DIPToScreenRect(hwnd, bounds);
+  window_bounds = display::win::ScreenWin::ScreenToDIPRect(
+      hwnd,
       window_->non_client_view()->GetWindowBoundsForClientBounds(dpi_bounds));
-  window_size = window_bounds.size();
 #endif
 
-  if (menu_bar_ && menu_bar_visible_)
-    window_size.set_height(window_size.height() + kMenuBarHeight);
-  return window_size;
+  if (menu_bar_ && menu_bar_visible_) {
+    window_bounds.set_y(window_bounds.y() - kMenuBarHeight);
+    window_bounds.set_height(window_bounds.height() + kMenuBarHeight);
+  }
+  return window_bounds;
 }
 
-gfx::Size NativeWindowViews::WindowSizeToContentSize(const gfx::Size& size) {
+gfx::Rect NativeWindowViews::WindowBoundsToContentBounds(
+    const gfx::Rect& bounds) {
   if (!has_frame())
-    return size;
+    return bounds;
 
-  gfx::Size content_size(size);
+  gfx::Rect content_bounds(bounds);
 #if defined(OS_WIN)
-  content_size = gfx::win::DIPToScreenSize(content_size);
+  HWND hwnd = GetAcceleratedWidget();
+  content_bounds.set_size(
+      display::win::ScreenWin::DIPToScreenSize(hwnd, content_bounds.size()));
   RECT rect;
   SetRectEmpty(&rect);
-  HWND hwnd = GetAcceleratedWidget();
   DWORD style = ::GetWindowLong(hwnd, GWL_STYLE);
   DWORD ex_style = ::GetWindowLong(hwnd, GWL_EXSTYLE);
   AdjustWindowRectEx(&rect, style, FALSE, ex_style);
-  content_size.set_width(content_size.width() - (rect.right - rect.left));
-  content_size.set_height(content_size.height() - (rect.bottom - rect.top));
-  content_size = gfx::win::ScreenToDIPSize(content_size);
+  content_bounds.set_width(content_bounds.width() - (rect.right - rect.left));
+  content_bounds.set_height(content_bounds.height() - (rect.bottom - rect.top));
+  content_bounds.set_size(
+      display::win::ScreenWin::ScreenToDIPSize(hwnd, content_bounds.size()));
 #endif
 
-  if (menu_bar_ && menu_bar_visible_)
-    content_size.set_height(content_size.height() - kMenuBarHeight);
-  return content_size;
+  if (menu_bar_ && menu_bar_visible_) {
+    content_bounds.set_y(content_bounds.y() + kMenuBarHeight);
+    content_bounds.set_height(content_bounds.height() - kMenuBarHeight);
+  }
+  return content_bounds;
 }
 
 void NativeWindowViews::HandleKeyboardEvent(

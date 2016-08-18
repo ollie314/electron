@@ -4,6 +4,7 @@
 
 #include "atom/browser/atom_browser_context.h"
 
+#include "atom/browser/api/atom_api_protocol.h"
 #include "atom/browser/atom_browser_main_parts.h"
 #include "atom/browser/atom_download_manager_delegate.h"
 #include "atom/browser/browser.h"
@@ -87,6 +88,9 @@ AtomBrowserContext::AtomBrowserContext(
   // Read options.
   use_cache_ = true;
   options.GetBoolean("cache", &use_cache_);
+
+  // Initialize Pref Registry in brightray.
+  InitPrefs();
 }
 
 AtomBrowserContext::~AtomBrowserContext() {
@@ -117,29 +121,29 @@ AtomBrowserContext::CreateURLRequestJobFactory(
   protocol_handlers->clear();
 
   job_factory->SetProtocolHandler(
-      url::kDataScheme, make_scoped_ptr(new net::DataProtocolHandler));
+      url::kDataScheme, base::WrapUnique(new net::DataProtocolHandler));
   job_factory->SetProtocolHandler(
-      url::kFileScheme, make_scoped_ptr(new asar::AsarProtocolHandler(
+      url::kFileScheme, base::WrapUnique(new asar::AsarProtocolHandler(
           BrowserThread::GetBlockingPool()->GetTaskRunnerWithShutdownBehavior(
               base::SequencedWorkerPool::SKIP_ON_SHUTDOWN))));
   job_factory->SetProtocolHandler(
       url::kHttpScheme,
-      make_scoped_ptr(new HttpProtocolHandler(url::kHttpScheme)));
+      base::WrapUnique(new HttpProtocolHandler(url::kHttpScheme)));
   job_factory->SetProtocolHandler(
       url::kHttpsScheme,
-      make_scoped_ptr(new HttpProtocolHandler(url::kHttpsScheme)));
+      base::WrapUnique(new HttpProtocolHandler(url::kHttpsScheme)));
   job_factory->SetProtocolHandler(
       url::kWsScheme,
-      make_scoped_ptr(new HttpProtocolHandler(url::kWsScheme)));
+      base::WrapUnique(new HttpProtocolHandler(url::kWsScheme)));
   job_factory->SetProtocolHandler(
       url::kWssScheme,
-      make_scoped_ptr(new HttpProtocolHandler(url::kWssScheme)));
+      base::WrapUnique(new HttpProtocolHandler(url::kWssScheme)));
 
   auto host_resolver =
       url_request_context_getter()->GetURLRequestContext()->host_resolver();
   job_factory->SetProtocolHandler(
       url::kFtpScheme,
-      make_scoped_ptr(new net::FtpProtocolHandler(
+      base::WrapUnique(new net::FtpProtocolHandler(
           new net::FtpNetworkLayer(host_resolver))));
 
   return std::move(job_factory);
@@ -178,11 +182,19 @@ content::PermissionManager* AtomBrowserContext::GetPermissionManager() {
 }
 
 std::unique_ptr<net::CertVerifier> AtomBrowserContext::CreateCertVerifier() {
-  return std::unique_ptr<net::CertVerifier>(new AtomCertVerifier);
+  return base::WrapUnique(new AtomCertVerifier);
 }
 
 net::SSLConfigService* AtomBrowserContext::CreateSSLConfigService() {
   return new AtomSSLConfigService;
+}
+
+std::vector<std::string> AtomBrowserContext::GetCookieableSchemes() {
+  auto default_schemes = brightray::BrowserContext::GetCookieableSchemes();
+  const auto& standard_schemes = atom::api::GetStandardSchemes();
+  default_schemes.insert(default_schemes.end(),
+                         standard_schemes.begin(), standard_schemes.end());
+  return default_schemes;
 }
 
 void AtomBrowserContext::RegisterPrefs(PrefRegistrySimple* pref_registry) {

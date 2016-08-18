@@ -6,8 +6,8 @@
 // In the main process.
 const {BrowserWindow} = require('electron')
 
-// Or in the renderer process.
-const {BrowserWindow} = require('electron').remote
+// Or use `remote` from the renderer process.
+// const {BrowserWindow} = require('electron').remote
 
 let win = new BrowserWindow({width: 800, height: 600})
 win.on('closed', () => {
@@ -35,6 +35,7 @@ process has done drawing for the first time, showing window after this event
 will have no visual flash:
 
 ```javascript
+const {BrowserWindow} = require('electron')
 let win = new BrowserWindow({show: false})
 win.once('ready-to-show', () => {
   win.show()
@@ -52,6 +53,8 @@ the app feel slow. In this case, it is recommended to show the window
 immediately, and use a `backgroundColor` close to your app's background:
 
 ```javascript
+const {BrowserWindow} = require('electron')
+
 let win = new BrowserWindow({backgroundColor: '#2e2c29'})
 win.loadURL('https://github.com')
 ```
@@ -64,8 +67,12 @@ to set `backgroundColor` to make app feel more native.
 By using `parent` option, you can create child windows:
 
 ```javascript
+const {BrowserWindow} = require('electron')
+
 let top = new BrowserWindow()
 let child = new BrowserWindow({parent: top})
+child.show()
+top.show()
 ```
 
 The `child` window will always show on top of the `top` window.
@@ -76,6 +83,8 @@ A modal window is a child window that disables parent window, to create a modal
 window, you have to set both `parent` and `modal` options:
 
 ```javascript
+const {BrowserWindow} = require('electron')
+
 let child = new BrowserWindow({parent: top, modal: true, show: false})
 child.loadURL('https://github.com')
 child.once('ready-to-show', () => {
@@ -199,8 +208,7 @@ Possible values are:
     input sparingly.
 * On Windows, possible type is `toolbar`.
 
-The `titleBarStyle` option is only supported on macOS 10.10 Yosemite and newer.
-Possible values are:
+Possible values of the `titleBarStyle` option are:
 
 * `default` or not specified, results in the standard gray opaque Mac title
   bar.
@@ -209,6 +217,7 @@ Possible values are:
   the top left.
 * `hidden-inset` results in a hidden title bar with an alternative look
   where the traffic light buttons are slightly more inset from the window edge.
+  It is not supported on macOS 10.9 Mavericks, where it falls back to `hidden`.
 
 The `webPreferences` option is an object that can have the following properties:
 
@@ -253,8 +262,6 @@ The `webPreferences` option is an object that can have the following properties:
   Default is `false`.
 * `experimentalCanvasFeatures` Boolean - Enables Chromium's experimental
   canvas features. Default is `false`.
-* `directWrite` Boolean - Enables DirectWrite font rendering system on
-  Windows. Default is `true`.
 * `scrollBounce` Boolean - Enables scroll bounce (rubber banding) effect on
   macOS. Default is `false`.
 * `blinkFeatures` String - A list of feature strings separated by `,`, like
@@ -276,6 +283,8 @@ The `webPreferences` option is an object that can have the following properties:
 * `defaultEncoding` String - Defaults to `ISO-8859-1`.
 * `backgroundThrottling` Boolean - Whether to throttle animations and timers
   when the page becomes background. Defaults to `true`.
+* `offscreen` Boolean - Whether to enable offscreen rendering for the browser
+  window. Defaults to `false`.
 
 ### Instance Events
 
@@ -289,6 +298,7 @@ labeled as such.
 Returns:
 
 * `event` Event
+* `title` String
 
 Emitted when the document changed its title, calling `event.preventDefault()`
 will prevent the native window's title from changing.
@@ -310,14 +320,14 @@ close. For example:
 
 ```javascript
 window.onbeforeunload = (e) => {
-  console.log('I do not want to be closed');
+  console.log('I do not want to be closed')
 
   // Unlike usual browsers that a message box will be prompted to users, returning
   // a non-void value will silently cancel the close.
   // It is recommended to use the dialog API to let the user confirm closing the
   // application.
-  e.returnValue = false;
-};
+  e.returnValue = false
+}
 ```
 
 #### Event: 'closed'
@@ -416,12 +426,14 @@ Commands are lowercased, underscores are replaced with hyphens, and the
 e.g. `APPCOMMAND_BROWSER_BACKWARD` is emitted as `browser-backward`.
 
 ```javascript
-someWindow.on('app-command', (e, cmd) => {
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow()
+win.on('app-command', (e, cmd) => {
   // Navigate the window back when the user hits their mouse back button
-  if (cmd === 'browser-backward' && someWindow.webContents.canGoBack()) {
-    someWindow.webContents.goBack();
+  if (cmd === 'browser-backward' && win.webContents.canGoBack()) {
+    win.webContents.goBack()
   }
-});
+})
 ```
 
 #### Event: 'scroll-touch-begin' _macOS_
@@ -498,7 +510,10 @@ an Object containing `name` and `version` properties.
 To check if a DevTools extension is installed you can run the following:
 
 ```javascript
+const {BrowserWindow} = require('electron')
+
 let installed = BrowserWindow.getDevToolsExtensions().hasOwnProperty('devtron')
+console.log(installed)
 ```
 
 **Note:** This API cannot be called before the `ready` event of the `app` module
@@ -509,8 +524,10 @@ is emitted.
 Objects created with `new BrowserWindow` have the following properties:
 
 ```javascript
+const {BrowserWindow} = require('electron')
 // In this example `win` is our instance
-let win = new BrowserWindow({width: 800, height: 600});
+let win = new BrowserWindow({width: 800, height: 600})
+win.loadURL('https://github.com')
 ```
 
 #### `win.webContents`
@@ -555,6 +572,10 @@ Removes focus from the window.
 #### `win.isFocused()`
 
 Returns a boolean, whether the window is focused.
+
+#### `win.isDestroyed()`
+
+Returns a boolean, whether the window is destroyed.
 
 #### `win.show()`
 
@@ -613,7 +634,7 @@ Returns a boolean, whether the window is in fullscreen mode.
 
 #### `win.setAspectRatio(aspectRatio[, extraSize])` _macOS_
 
-* `aspectRatio` The aspect ratio to maintain for some portion of the
+* `aspectRatio` Float - The aspect ratio to maintain for some portion of the
 content view.
 * `extraSize` Object (optional) - The extra size not to be included while
 maintaining the aspect ratio.
@@ -648,6 +669,23 @@ Resizes and moves the window to `width`, `height`, `x`, `y`.
 #### `win.getBounds()`
 
 Returns an object that contains window's width, height, x and y values.
+
+#### `win.setContentBounds(options[, animate])`
+
+* `options` Object
+  * `x` Integer
+  * `y` Integer
+  * `width` Integer
+  * `height` Integer
+* `animate` Boolean (optional) _macOS_
+
+Resizes and moves the window's client area (e.g. the web page) to
+`width`, `height`, `x`, `y`.
+
+#### `win.getContentBounds()`
+
+Returns an object that contains the window's client area (e.g. the web page)
+width, height, x and y values.
 
 #### `win.setSize(width, height[, animate])`
 
@@ -806,13 +844,19 @@ window.
 
 #### `win.setSheetOffset(offsetY[, offsetX])` _macOS_
 
+* `offsetY` Float
+* `offsetX` Float (optional)
+
 Changes the attachment point for sheets on macOS. By default, sheets are
 attached just below the window frame, but you may want to display them beneath
 a HTML-rendered toolbar. For example:
 
 ```javascript
-let toolbarRect = document.getElementById('toolbar').getBoundingClientRect();
-win.setSheetOffset(toolbarRect.height);
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow()
+
+let toolbarRect = document.getElementById('toolbar').getBoundingClientRect()
+win.setSheetOffset(toolbarRect.height)
 ```
 
 #### `win.flashFrame(flag)`
@@ -913,9 +957,11 @@ Same as `webContents.reload`.
 Sets the `menu` as the window's menu bar, setting it to `null` will remove the
 menu bar.
 
-#### `win.setProgressBar(progress)`
+#### `win.setProgressBar(progress[, options])`
 
 * `progress` Double
+* `options` Object (optional)
+  * `mode` String _Windows_ - Mode for the progres bar (`none`, `normal`, `indeterminate`, `error`, or `paused`)
 
 Sets progress value in progress bar. Valid range is [0, 1.0].
 
@@ -925,6 +971,10 @@ Change to indeterminate mode when progress > 1.
 On Linux platform, only supports Unity desktop environment, you need to specify
 the `*.desktop` file name to `desktopName` field in `package.json`. By default,
 it will assume `app.getName().desktop`.
+
+On Windows, a mode can be passed. Accepted values are `none`, `normal`, 
+`indeterminate`, `error`, and `paused`. If you call `setProgressBar` without a
+mode set (but with a value within the valid range), `normal` will be assumed.
 
 #### `win.setOverlayIcon(overlay, description)` _Windows_
 
@@ -998,6 +1048,13 @@ hovering over the window in the taskbar. You can reset the thumbnail to be
 the entire window by specifying an empty region:
 `{x: 0, y: 0, width: 0, height: 0}`.
 
+#### `win.setThumbnailToolTip(toolTip)` _Windows_
+
+* `toolTip` String
+
+Sets the toolTip that is displayed when hovering over the window thumbnail
+in the taskbar.
+
 #### `win.showDefinitionForSelection()` _macOS_
 
 Same as `webContents.showDefinitionForSelection()`.
@@ -1062,7 +1119,7 @@ events.
 Prevents the window contents from being captured by other apps.
 
 On macOS it sets the NSWindow's sharingType to NSWindowSharingNone.
-On Windows it calls SetWindowDisplayAffinity with WDA_MONITOR.
+On Windows it calls SetWindowDisplayAffinity with `WDA_MONITOR`.
 
 #### `win.setFocusable(focusable)` _Windows_
 

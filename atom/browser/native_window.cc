@@ -40,6 +40,11 @@
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gl/gpu_switching_manager.h"
 
+#if defined(OS_LINUX) || defined(OS_WIN)
+#include "content/public/common/renderer_preferences.h"
+#include "ui/gfx/font_render_params.h"
+#endif
+
 DEFINE_WEB_CONTENTS_USER_DATA_KEY(atom::NativeWindowRelay);
 
 namespace atom {
@@ -66,6 +71,20 @@ NativeWindow::NativeWindow(
 
   if (parent)
     options.Get("modal", &is_modal_);
+
+#if defined(OS_LINUX) || defined(OS_WIN)
+  auto* prefs = web_contents()->GetMutableRendererPrefs();
+
+  // Update font settings.
+  CR_DEFINE_STATIC_LOCAL(const gfx::FontRenderParams, params,
+      (gfx::GetFontRenderParams(gfx::FontRenderParamsQuery(), nullptr)));
+  prefs->should_antialias_text = params.antialiasing;
+  prefs->use_subpixel_positioning = params.subpixel_positioning;
+  prefs->hinting = params.hinting;
+  prefs->use_autohinter = params.autohinter;
+  prefs->use_bitmaps = params.use_bitmaps;
+  prefs->subpixel_rendering = params.subpixel_rendering;
+#endif
 
   // Tell the content module to initialize renderer widget with transparent
   // mode.
@@ -200,34 +219,50 @@ gfx::Point NativeWindow::GetPosition() {
 }
 
 void NativeWindow::SetContentSize(const gfx::Size& size, bool animate) {
-  SetSize(ContentSizeToWindowSize(size), animate);
+  SetSize(ContentBoundsToWindowBounds(gfx::Rect(size)).size(), animate);
 }
 
 gfx::Size NativeWindow::GetContentSize() {
-  return WindowSizeToContentSize(GetSize());
+  return GetContentBounds().size();
+}
+
+void NativeWindow::SetContentBounds(const gfx::Rect& bounds, bool animate) {
+  SetBounds(ContentBoundsToWindowBounds(bounds), animate);
+}
+
+gfx::Rect NativeWindow::GetContentBounds() {
+  return WindowBoundsToContentBounds(GetBounds());
 }
 
 void NativeWindow::SetSizeConstraints(
     const extensions::SizeConstraints& window_constraints) {
   extensions::SizeConstraints content_constraints(GetContentSizeConstraints());
-  if (window_constraints.HasMaximumSize())
-    content_constraints.set_maximum_size(
-        WindowSizeToContentSize(window_constraints.GetMaximumSize()));
-  if (window_constraints.HasMinimumSize())
-    content_constraints.set_minimum_size(
-        WindowSizeToContentSize(window_constraints.GetMinimumSize()));
+  if (window_constraints.HasMaximumSize()) {
+    gfx::Rect max_bounds = WindowBoundsToContentBounds(
+        gfx::Rect(window_constraints.GetMaximumSize()));
+    content_constraints.set_maximum_size(max_bounds.size());
+  }
+  if (window_constraints.HasMinimumSize()) {
+    gfx::Rect min_bounds = WindowBoundsToContentBounds(
+        gfx::Rect(window_constraints.GetMinimumSize()));
+    content_constraints.set_minimum_size(min_bounds.size());
+  }
   SetContentSizeConstraints(content_constraints);
 }
 
 extensions::SizeConstraints NativeWindow::GetSizeConstraints() {
   extensions::SizeConstraints content_constraints = GetContentSizeConstraints();
   extensions::SizeConstraints window_constraints;
-  if (content_constraints.HasMaximumSize())
-    window_constraints.set_maximum_size(
-        ContentSizeToWindowSize(content_constraints.GetMaximumSize()));
-  if (content_constraints.HasMinimumSize())
-    window_constraints.set_minimum_size(
-        ContentSizeToWindowSize(content_constraints.GetMinimumSize()));
+  if (content_constraints.HasMaximumSize()) {
+    gfx::Rect max_bounds = ContentBoundsToWindowBounds(
+        gfx::Rect(content_constraints.GetMaximumSize()));
+    window_constraints.set_maximum_size(max_bounds.size());
+  }
+  if (content_constraints.HasMinimumSize()) {
+    gfx::Rect min_bounds = ContentBoundsToWindowBounds(
+        gfx::Rect(content_constraints.GetMinimumSize()));
+    window_constraints.set_minimum_size(min_bounds.size());
+  }
   return window_constraints;
 }
 
@@ -356,7 +391,7 @@ void NativeWindow::RequestToClosePage() {
     ScheduleUnresponsiveEvent(5000);
 
   if (web_contents()->NeedToFireBeforeUnload())
-    web_contents()->DispatchBeforeUnload(false);
+    web_contents()->DispatchBeforeUnload();
   else
     web_contents()->Close();
 }

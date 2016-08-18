@@ -6,6 +6,7 @@
 #define ATOM_BROWSER_ATOM_BROWSER_CONTEXT_H_
 
 #include <string>
+#include <vector>
 
 #include "brightray/browser/browser_context.h"
 
@@ -36,6 +37,7 @@ class AtomBrowserContext : public brightray::BrowserContext {
       const base::FilePath& base_path) override;
   std::unique_ptr<net::CertVerifier> CreateCertVerifier() override;
   net::SSLConfigService* CreateSSLConfigService() override;
+  std::vector<std::string> GetCookieableSchemes() override;
 
   // content::BrowserContext:
   content::DownloadManagerDelegate* GetDownloadManagerDelegate() override;

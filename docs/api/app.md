@@ -6,10 +6,10 @@ The following example shows how to quit the application when the last window is
 closed:
 
 ```javascript
-const {app} = require('electron');
+const {app} = require('electron')
 app.on('window-all-closed', () => {
-  app.quit();
-});
+  app.quit()
+})
 ```
 
 ## Events
@@ -178,12 +178,12 @@ Returns:
 * `url` URL
 * `error` String - The error code
 * `certificate` Object
-  * `data` Buffer - PEM encoded data
+  * `data` String - PEM encoded data
   * `issuerName` String - Issuer's Common Name
   * `subjectName` String - Subject's Common Name
-  * `serialNumber` Buffer - DER encoded data
-  * `validStart` Integer - Start date of the certificate being valid
-  * `validExpiry` Integer - End date of the certificate being valid
+  * `serialNumber` String - Hex value represented string
+  * `validStart` Integer - Start date of the certificate being valid in seconds
+  * `validExpiry` Integer - End date of the certificate being valid in seconds
   * `fingerprint` String - Fingerprint of the certificate
 * `callback` Function
 
@@ -192,15 +192,17 @@ certificate you should prevent the default behavior with
 `event.preventDefault()` and call `callback(true)`.
 
 ```javascript
+const {app} = require('electron')
+
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
   if (url === 'https://github.com') {
     // Verification logic.
-    event.preventDefault();
-    callback(true);
+    event.preventDefault()
+    callback(true)
   } else {
-    callback(false);
+    callback(false)
   }
-});
+})
 ```
 
 ### Event: 'select-client-certificate'
@@ -211,12 +213,12 @@ Returns:
 * `webContents` [WebContents](web-contents.md)
 * `url` URL
 * `certificateList` [Objects]
-  * `data` Buffer - PEM encoded data
+  * `data` String - PEM encoded data
   * `issuerName` String - Issuer's Common Name
   * `subjectName` String - Subject's Common Name
-  * `serialNumber` - DER encoded data
-  * `validStart` Integer - Start date of the certificate being valid
-  * `validExpiry` Integer - End date of the certificate being valid
+  * `serialNumber` String - Hex value represented string
+  * `validStart` Integer - Start date of the certificate being valid in seconds
+  * `validExpiry` Integer - End date of the certificate being valid in seconds
   * `fingerprint` String - Fingerprint of the certificate
 * `callback` Function
 
@@ -228,10 +230,12 @@ and `callback` needs to be called with an entry filtered from the list. Using
 certificate from the store.
 
 ```javascript
+const {app} = require('electron')
+
 app.on('select-client-certificate', (event, webContents, url, list, callback) => {
-  event.preventDefault();
-  callback(list[0]);
-});
+  event.preventDefault()
+  callback(list[0])
+})
 ```
 
 ### Event: 'login'
@@ -259,10 +263,12 @@ should prevent the default behavior with `event.preventDefault()` and call
 `callback(username, password)` with the credentials.
 
 ```javascript
+const {app} = require('electron')
+
 app.on('login', (event, webContents, request, authInfo, callback) => {
-  event.preventDefault();
-  callback('username', 'secret');
-});
+  event.preventDefault()
+  callback('username', 'secret')
+})
 ```
 
 ### Event: 'gpu-process-crashed'
@@ -331,6 +337,8 @@ An example of restarting current instance immediately and adding a new command
 line argument to the new instance:
 
 ```javascript
+const {app} = require('electron')
+
 app.relaunch({args: process.argv.slice(1) + ['--relaunch']})
 app.exit(0)
 ```
@@ -452,6 +460,8 @@ system. Once registered, all links with `your-protocol://` will be opened with
 the current executable. The whole link, including protocol, will be passed to
 your application as a parameter.
 
+Returns `true` when the call succeeded, otherwise returns `false`.
+
 **Note:** On macOS, you can only register protocols that have been added to
 your app's `info.plist`, which can not be modified at runtime. You can however
 change the file with a simple text editor or script during build time.
@@ -465,6 +475,8 @@ The API uses the Windows Registry and LSSetDefaultHandlerForURLScheme internally
 
 This method checks if the current executable as the default handler for a
 protocol (aka URI scheme). If so, it will remove the app as the default handler.
+
+Returns `true` when the call succeeded, otherwise returns `false`.
 
 ### `app.isDefaultProtocolClient(protocol)` _macOS_ _Windows_
 
@@ -504,6 +516,8 @@ Adds `tasks` to the [Tasks][tasks] category of the JumpList on Windows.
   consists of two or more icons, set this value to identify the icon. If an
   icon file consists of one icon, this value is 0.
 
+Returns `true` when the call succeeded, otherwise returns `false`.
+
 ### `app.makeSingleInstance(callback)`
 
 * `callback` Function
@@ -537,24 +551,24 @@ An example of activating the window of primary instance when a second instance
 starts:
 
 ```javascript
-let myWindow = null;
+const {app} = require('electron')
+let myWindow = null
 
 const shouldQuit = app.makeSingleInstance((commandLine, workingDirectory) => {
   // Someone tried to run a second instance, we should focus our window.
   if (myWindow) {
-    if (myWindow.isMinimized()) myWindow.restore();
-    myWindow.focus();
+    if (myWindow.isMinimized()) myWindow.restore()
+    myWindow.focus()
   }
-});
+})
 
 if (shouldQuit) {
-  app.quit();
-  return;
+  app.quit()
 }
 
 // Create myWindow, load the rest of the app, etc...
 app.on('ready', () => {
-});
+})
 ```
 
 ### `app.releaseSingleInstance()`
@@ -716,6 +730,12 @@ Hides the dock icon.
 ### `app.dock.show()` _macOS_
 
 Shows the dock icon.
+
+### `app.dock.isVisible()` _macOS_
+
+Returns whether the dock icon is visible.
+The `app.dock.show()` call is asynchronous so this method might not
+return true immediately after that call.
 
 ### `app.dock.setMenu(menu)` _macOS_
 

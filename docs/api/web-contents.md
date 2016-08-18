@@ -9,20 +9,22 @@ the [`BrowserWindow`](browser-window.md) object. An example of accessing the
 `webContents` object:
 
 ```javascript
-const {BrowserWindow} = require('electron');
+const {BrowserWindow} = require('electron')
 
-let win = new BrowserWindow({width: 800, height: 1500});
-win.loadURL('http://github.com');
+let win = new BrowserWindow({width: 800, height: 1500})
+win.loadURL('http://github.com')
 
-let contents = win.webContents;
+let contents = win.webContents
+console.log(contents)
 ```
 
 ## Methods
 
 These methods can be accessed from the `webContents` module:
 
-```js
-const {webContents} = require('electron');
+```javascript
+const {webContents} = require('electron')
+console.log(webContents)
 ```
 
 ### `webContents.getAllWebContents()`
@@ -183,6 +185,7 @@ Returns:
 
 * `event` Event
 * `url` String
+* `isMainFrame` Boolean
 
 Emitted when an in-page navigation happened.
 
@@ -228,12 +231,12 @@ Returns:
 * `url` URL
 * `error` String - The error code
 * `certificate` Object
-  * `data` Buffer - PEM encoded data
+  * `data` String - PEM encoded data
   * `issuerName` String - Issuer's Common Name
   * `subjectName` String - Subject's Common Name
-  * `serialNumber` - DER encoded data
-  * `validStart` Integer - Start date of the certificate being valid
-  * `validExpiry` Integer - End date of the certificate being valid
+  * `serialNumber` String - Hex value represented string
+  * `validStart` Integer - Start date of the certificate being valid in seconds
+  * `validExpiry` Integer - End date of the certificate being valid in seconds
   * `fingerprint` String - Fingerprint of the certificate
 * `callback` Function
 
@@ -249,12 +252,12 @@ Returns:
 * `event` Event
 * `url` URL
 * `certificateList` [Objects]
-  * `data` Buffer - PEM encoded data
+  * `data` String - PEM encoded data
   * `issuerName` String - Issuer's Common Name
   * `subjectName` String - Subject's Common Name
-  * `serialNumber` - DER encoded data
-  * `validStart` Integer - Start date of the certificate being valid
-  * `validExpiry` Integer - End date of the certificate being valid
+  * `serialNumber` String - Hex value represented string
+  * `validStart` Integer - Start date of the certificate being valid in seconds
+  * `validExpiry` Integer - End date of the certificate being valid in seconds
   * `fingerprint` String - Fingerprint of the certificate
 * `callback` Function
 
@@ -332,7 +335,13 @@ Returns:
 * `event` Event
 * `type` String
 * `image` NativeImage (optional)
-* `scale` Float (optional)
+* `scale` Float (optional) - scaling factor for the custom cursor
+* `size` Object (optional) - the size of the `image`
+  * `width` Integer
+  * `height` Integer
+* `hotspot` Object (optional) - coordinates of the custom cursor's hotspot
+  * `x` Integer - x coordinate
+  * `y` Integer - y coordinate
 
 Emitted when the cursor's type changes. The `type` parameter can be `default`,
 `crosshair`, `pointer`, `text`, `wait`, `help`, `e-resize`, `n-resize`,
@@ -344,8 +353,8 @@ Emitted when the cursor's type changes. The `type` parameter can be `default`,
 `not-allowed`, `zoom-in`, `zoom-out`, `grab`, `grabbing`, `custom`.
 
 If the `type` parameter is `custom`, the `image` parameter will hold the custom
-cursor image in a `NativeImage`, and the `scale` will hold scaling information
-for the image.
+cursor image in a `NativeImage`, and `scale`, `size` and `hotspot` will hold
+additional information about the custom cursor.
 
 #### Event: 'context-menu'
 
@@ -367,7 +376,7 @@ Returns:
     was invoked on. Elements with source URLs are images, audio and video.
   * `mediaType` String - Type of the node the context menu was invoked on. Can
     be `none`, `image`, `audio`, `video`, `canvas`, `file` or `plugin`.
-  * `hasImageContent` Boolean - Whether the context menu was invoked on an image
+  * `hasImageContents` Boolean - Whether the context menu was invoked on an image
     which has non-empty contents.
   * `isEditable` Boolean - Whether the context is editable.
   * `selectionText` String - Text of the selection that the context menu was
@@ -431,6 +440,7 @@ first available device will be selected. `callback` should be called with
 cancel the request.
 
 ```javascript
+const {app, webContents} = require('electron')
 app.commandLine.appendSwitch('enable-web-bluetooth')
 
 app.on('ready', () => {
@@ -448,6 +458,31 @@ app.on('ready', () => {
 })
 ```
 
+#### Event: 'paint'
+
+Returns:
+
+* `event` Event
+* `dirtyRect` Object
+  * `x` Integer - The x coordinate on the image.
+  * `y` Integer - The y coordinate on the image.
+  * `width` Integer - The width of the dirty area.
+  * `height` Integer - The height of the dirty area.
+* `image` [NativeImage](native-image.md) - The image data of the whole frame.
+
+Emitted when a new frame is generated. Only the dirty area is passed in the
+buffer.
+
+```javascript
+const {BrowserWindow} = require('electron')
+
+let win = new BrowserWindow({webPreferences: {offscreen: true}})
+win.webContents.on('paint', (event, dirty, image) => {
+  // updateBitmap(dirty, image.getBitmap())
+})
+win.loadURL('http://github.com')
+```
+
 ### Instance Methods
 
 #### `contents.loadURL(url[, options])`
@@ -463,8 +498,9 @@ e.g. the `http://` or `file://`. If the load should bypass http cache then
 use the `pragma` header to achieve it.
 
 ```javascript
-const options = {extraHeaders: 'pragma: no-cache\n'};
-webContents.loadURL(url, options);
+const {webContents} = require('electron')
+const options = {extraHeaders: 'pragma: no-cache\n'}
+webContents.loadURL('https://github.com', options)
 ```
 
 #### `contents.downloadURL(url)`
@@ -479,15 +515,21 @@ Initiates a download of the resource at `url` without navigating. The
 Returns URL of the current web page.
 
 ```javascript
-let win = new BrowserWindow({width: 800, height: 600});
-win.loadURL('http://github.com');
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow({width: 800, height: 600})
+win.loadURL('http://github.com')
 
-let currentURL = win.webContents.getURL();
+let currentURL = win.webContents.getURL()
+console.log(currentURL)
 ```
 
 #### `contents.getTitle()`
 
 Returns the title of the current web page.
+
+#### `contents.isDestroyed()`
+
+Returns a Boolean, whether the web page is destroyed.
 
 #### `contents.isFocused()`
 
@@ -600,6 +642,42 @@ Mute the audio on the current web page.
 
 Returns whether this page has been muted.
 
+#### `contents.setZoomFactor(factor)`
+
+* `factor` Number - Zoom factor.
+
+Changes the zoom factor to the specified factor. Zoom factor is
+zoom percent divided by 100, so 300% = 3.0.
+
+#### `contents.getZoomFactor(callback)`
+
+* `callback` Function
+
+Sends a request to get current zoom factor, the `callback` will be called with
+`callback(zoomFactor)`.
+
+#### `contents.setZoomLevel(level)`
+
+* `level` Number - Zoom level
+
+Changes the zoom level to the specified level. The original size is 0 and each
+increment above or below represents zooming 20% larger or smaller to default
+limits of 300% and 50% of original size, respectively.
+
+#### `contents.getZoomLevel(callback)`
+
+* `callback` Function
+
+Sends a request to get current zoom level, the `callback` will be called with
+`callback(zoomLevel)`.
+
+#### `contents.setZoomLevelLimits(minimumLevel, maximumLevel)`
+
+* `minimumLevel` Number
+* `maximumLevel` Number
+
+Sets the maximum and minimum zoom level.
+
 #### `contents.undo()`
 
 Executes the editing command `undo` in web page.
@@ -615,6 +693,13 @@ Executes the editing command `cut` in web page.
 #### `contents.copy()`
 
 Executes the editing command `copy` in web page.
+
+### `contents.copyImageAt(x, y)`
+
+* `x` Integer
+* `y` Integer
+
+Copy the image at the given position to the clipboard.
 
 #### `contents.paste()`
 
@@ -686,12 +771,13 @@ the request can be obtained by subscribing to
 Stops any `findInPage` request for the `webContents` with the provided `action`.
 
 ```javascript
+const {webContents} = require('electron')
 webContents.on('found-in-page', (event, result) => {
-  if (result.finalUpdate)
-    webContents.stopFindInPage('clearSelection');
-});
+  if (result.finalUpdate) webContents.stopFindInPage('clearSelection')
+})
 
-const requestId = webContents.findInPage('api');
+const requestId = webContents.findInPage('api')
+console.log(requestId)
 ```
 
 #### `contents.capturePage([rect, ]callback)`
@@ -769,23 +855,22 @@ By default, an empty `options` will be regarded as:
 An example of `webContents.printToPDF`:
 
 ```javascript
-const {BrowserWindow} = require('electron');
-const fs = require('fs');
+const {BrowserWindow} = require('electron')
+const fs = require('fs')
 
-let win = new BrowserWindow({width: 800, height: 600});
-win.loadURL('http://github.com');
+let win = new BrowserWindow({width: 800, height: 600})
+win.loadURL('http://github.com')
 
 win.webContents.on('did-finish-load', () => {
   // Use default printing options
   win.webContents.printToPDF({}, (error, data) => {
-    if (error) throw error;
+    if (error) throw error
     fs.writeFile('/tmp/print.pdf', data, (error) => {
-      if (error)
-        throw error;
-      console.log('Write PDF successfully.');
-    });
-  });
-});
+      if (error) throw error
+      console.log('Write PDF successfully.')
+    })
+  })
+})
 ```
 
 #### `contents.addWorkSpace(path)`
@@ -796,9 +881,11 @@ Adds the specified path to DevTools workspace. Must be used after DevTools
 creation:
 
 ```javascript
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow()
 win.webContents.on('devtools-opened', () => {
-  win.webContents.addWorkSpace(__dirname);
-});
+  win.webContents.addWorkSpace(__dirname)
+})
 ```
 
 #### `contents.removeWorkSpace(path)`
@@ -859,15 +946,16 @@ An example of sending messages from the main process to the renderer process:
 
 ```javascript
 // In the main process.
-let win = null;
+const {app, BrowserWindow} = require('electron')
+let win = null
 
 app.on('ready', () => {
-  win = new BrowserWindow({width: 800, height: 600});
-  win.loadURL(`file://${__dirname}/index.html`);
+  win = new BrowserWindow({width: 800, height: 600})
+  win.loadURL(`file://${__dirname}/index.html`)
   win.webContents.on('did-finish-load', () => {
-    win.webContents.send('ping', 'whoooooooh!');
-  });
-});
+    win.webContents.send('ping', 'whoooooooh!')
+  })
+})
 ```
 
 ```html
@@ -876,8 +964,8 @@ app.on('ready', () => {
 <body>
   <script>
     require('electron').ipcRenderer.on('ping', (event, message) => {
-      console.log(message);  // Prints "whoooooooh!"
-    });
+      console.log(message)  // Prints 'whoooooooh!'
+    })
   </script>
 </body>
 </html>
@@ -898,7 +986,7 @@ app.on('ready', () => {
     (screenPosition == mobile) (default: `{x: 0, y: 0}`)
   * `x` Integer - Set the x axis offset from top left corner
   * `y` Integer - Set the y axis offset from top left corner
-* `deviceScaleFactor` Integer - Set the device scale factor (if zero defaults to
+* `deviceScaleFactor` Float - Set the device scale factor (if zero defaults to
     original device scale factor) (default: `0`)
 * `viewSize` Object - Set the emulated view size (empty means no override)
   * `width` Integer - Set the emulated view width
@@ -1006,19 +1094,46 @@ the cursor when dragging.
 Returns true if the process of saving page has been initiated successfully.
 
 ```javascript
-win.loadURL('https://github.com');
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow()
+
+win.loadURL('https://github.com')
 
 win.webContents.on('did-finish-load', () => {
   win.webContents.savePage('/tmp/test.html', 'HTMLComplete', (error) => {
-    if (!error)
-      console.log('Save page successfully');
-  });
-});
+    if (!error) console.log('Save page successfully')
+  })
+})
 ```
 
 #### `contents.showDefinitionForSelection()` _macOS_
 
 Shows pop-up dictionary that searches the selected word on the page.
+
+#### `contents.isOffscreen()`
+
+Indicates whether *offscreen rendering* is enabled.
+
+#### `contents.startPainting()`
+
+If *offscreen rendering* is enabled and not painting, start painting.
+
+#### `contents.stopPainting()`
+
+If *offscreen rendering* is enabled and painting, stop painting.
+
+#### `contents.isPainting()`
+
+If *offscreen rendering* is enabled returns whether it is currently painting.
+
+#### `contents.setFrameRate(fps)`
+
+If *offscreen rendering* is enabled sets the frame rate to the specified number.
+Only values between 1 and 60 are accepted.
+
+#### `contents.getFrameRate()`
+
+If *offscreen rendering* is enabled returns the current frame rate.
 
 ### Instance Properties
 
@@ -1050,24 +1165,28 @@ Get the debugger instance for this webContents.
 Debugger API serves as an alternate transport for [remote debugging protocol][rdp].
 
 ```javascript
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow()
+
 try {
-  win.webContents.debugger.attach('1.1');
-} catch(err) {
-  console.log('Debugger attach failed : ', err);
-};
+  win.webContents.debugger.attach('1.1')
+} catch (err) {
+  console.log('Debugger attach failed : ', err)
+}
 
 win.webContents.debugger.on('detach', (event, reason) => {
-  console.log('Debugger detached due to : ', reason);
-});
+  console.log('Debugger detached due to : ', reason)
+})
 
 win.webContents.debugger.on('message', (event, method, params) => {
   if (method === 'Network.requestWillBeSent') {
-    if (params.request.url === 'https://www.github.com')
-      win.webContents.debugger.detach();
+    if (params.request.url === 'https://www.github.com') {
+      win.webContents.debugger.detach()
+    }
   }
-});
+})
 
-win.webContents.debugger.sendCommand('Network.enable');
+win.webContents.debugger.sendCommand('Network.enable')
 ```
 
 ### Instance Methods

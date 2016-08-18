@@ -2,6 +2,7 @@
 
 const assert = require('assert')
 const path = require('path')
+const {closeWindow} = require('./window-helpers')
 
 const {remote} = require('electron')
 const {BrowserWindow, webContents} = remote
@@ -13,9 +14,6 @@ describe('webContents module', function () {
   let w
 
   beforeEach(function () {
-    if (w != null) {
-      w.destroy()
-    }
     w = new BrowserWindow({
       show: false,
       width: 400,
@@ -27,10 +25,7 @@ describe('webContents module', function () {
   })
 
   afterEach(function () {
-    if (w != null) {
-      w.destroy()
-    }
-    w = null
+    return closeWindow(w).then(function () { w = null })
   })
 
   describe('getAllWebContents() API', function () {
@@ -40,11 +35,10 @@ describe('webContents module', function () {
           return a.getId() - b.getId()
         })
 
-        assert.equal(all.length, 4)
+        assert.ok(all.length >= 4)
         assert.equal(all[0].getType(), 'window')
-        assert.equal(all[1].getType(), 'window')
-        assert.equal(all[2].getType(), 'remote')
-        assert.equal(all[3].getType(), 'webview')
+        assert.equal(all[all.length - 2].getType(), 'remote')
+        assert.equal(all[all.length - 1].getType(), 'webview')
 
         done()
       })
@@ -63,17 +57,25 @@ describe('webContents module', function () {
       const specWebContents = remote.getCurrentWebContents()
       assert.equal(specWebContents.getId(), webContents.getFocusedWebContents().getId())
 
-      specWebContents.on('devtools-opened', function () {
+      specWebContents.once('devtools-opened', function () {
         assert.equal(specWebContents.devToolsWebContents.getId(), webContents.getFocusedWebContents().getId())
         specWebContents.closeDevTools()
       })
 
-      specWebContents.on('devtools-closed', function () {
+      specWebContents.once('devtools-closed', function () {
         assert.equal(specWebContents.getId(), webContents.getFocusedWebContents().getId())
         done()
       })
 
       specWebContents.openDevTools()
+    })
+  })
+
+  describe('isFocused() API', function () {
+    it('returns false when the window is hidden', function () {
+      BrowserWindow.getAllWindows().forEach(function (window) {
+        assert.equal(!window.isVisible() && window.webContents.isFocused(), false)
+      })
     })
   })
 })

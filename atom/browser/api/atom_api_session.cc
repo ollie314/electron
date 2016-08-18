@@ -4,6 +4,7 @@
 
 #include "atom/browser/api/atom_api_session.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -28,7 +29,7 @@
 #include "components/prefs/pref_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/thread_task_runner_handle.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "brightray/browser/net/devtools_network_conditions.h"
 #include "brightray/browser/net/devtools_network_controller_handle.h"
 #include "chrome/common/pref_names.h"
@@ -133,7 +134,7 @@ struct Converter<net::ProxyConfig> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      net::ProxyConfig* out) {
-    std::string proxy_rules;
+    std::string proxy_rules, proxy_bypass_rules;
     GURL pac_url;
     mate::Dictionary options;
     // Fallback to previous API when passed String.
@@ -143,6 +144,7 @@ struct Converter<net::ProxyConfig> {
     } else if (ConvertFromV8(isolate, val, &options)) {
       options.Get("pacScript", &pac_url);
       options.Get("proxyRules", &proxy_rules);
+      options.Get("proxyBypassRules", &proxy_bypass_rules);
     } else {
       return false;
     }
@@ -152,6 +154,7 @@ struct Converter<net::ProxyConfig> {
       out->set_pac_url(pac_url);
     } else {
       out->proxy_rules().ParseFromString(proxy_rules);
+      out->proxy_rules().bypass_rules.ParseFromString(proxy_bypass_rules);
     }
     return true;
   }
@@ -167,9 +170,8 @@ namespace {
 
 const char kPersistPrefix[] = "persist:";
 
-// The wrapSession funtion which is implemented in JavaScript
-using WrapSessionCallback = base::Callback<void(v8::Local<v8::Value>)>;
-WrapSessionCallback g_wrap_session;
+// Referenced session objects.
+std::map<uint32_t, v8::Global<v8::Object>> g_sessions;
 
 class ResolveProxyHelper {
  public:
@@ -179,7 +181,7 @@ class ResolveProxyHelper {
       : callback_(callback),
         original_thread_(base::ThreadTaskRunnerHandle::Get()) {
     scoped_refptr<net::URLRequestContextGetter> context_getter =
-        browser_context->GetRequestContext();
+        browser_context->url_request_context_getter();
     context_getter->GetNetworkTaskRunner()->PostTask(
         FROM_HERE,
         base::Bind(&ResolveProxyHelper::ResolveProxy,
@@ -282,7 +284,7 @@ void SetProxyInIO(net::URLRequestContextGetter* getter,
                   const net::ProxyConfig& config,
                   const base::Closure& callback) {
   auto proxy_service = getter->GetURLRequestContext()->proxy_service();
-  proxy_service->ResetConfigService(make_scoped_ptr(
+  proxy_service->ResetConfigService(base::WrapUnique(
       new net::ProxyConfigServiceFixed(config)));
   // Refetches and applies the new pac script if provided.
   proxy_service->ForceReloadProxyConfig();
@@ -344,6 +346,7 @@ Session::Session(v8::Isolate* isolate, AtomBrowserContext* browser_context)
 Session::~Session() {
   content::BrowserContext::GetDownloadManager(browser_context())->
       RemoveObserver(this);
+  g_sessions.erase(weak_map_id());
 }
 
 void Session::OnDownloadCreated(content::DownloadManager* manager,
@@ -534,7 +537,12 @@ mate::Handle<Session> Session::CreateFrom(
 
   auto handle = mate::CreateHandle(
       isolate, new Session(isolate, browser_context));
-  g_wrap_session.Run(handle.ToV8());
+
+  // The Sessions should never be garbage collected, since the common pattern is
+  // to use partition strings, instead of using the Session object directly.
+  g_sessions[handle->weak_map_id()] =
+      v8::Global<v8::Object>(isolate, handle.ToV8());
+
   return handle;
 }
 
@@ -557,8 +565,9 @@ mate::Handle<Session> Session::FromPartition(
 
 // static
 void Session::BuildPrototype(v8::Isolate* isolate,
-                             v8::Local<v8::ObjectTemplate> prototype) {
-  mate::ObjectTemplateBuilder(isolate, prototype)
+                             v8::Local<v8::FunctionTemplate> prototype) {
+  prototype->SetClassName(mate::StringToV8(isolate, "Session"));
+  mate::ObjectTemplateBuilder(isolate, prototype->PrototypeTemplate())
       .MakeDestroyable()
       .SetMethod("resolveProxy", &Session::ResolveProxy)
       .SetMethod("getCacheSize", &Session::DoCacheAction<CacheAction::STATS>)
@@ -582,15 +591,13 @@ void Session::BuildPrototype(v8::Isolate* isolate,
       .SetProperty("webRequest", &Session::WebRequest);
 }
 
-void SetWrapSession(const WrapSessionCallback& callback) {
-  g_wrap_session = callback;
-}
-
 }  // namespace api
 
 }  // namespace atom
 
 namespace {
+
+using atom::api::Session;
 
 v8::Local<v8::Value> FromPartition(
     const std::string& partition, mate::Arguments* args) {
@@ -600,16 +607,15 @@ v8::Local<v8::Value> FromPartition(
   }
   base::DictionaryValue options;
   args->GetNext(&options);
-  return atom::api::Session::FromPartition(
-      args->isolate(), partition, options).ToV8();
+  return Session::FromPartition(args->isolate(), partition, options).ToV8();
 }
 
 void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value> unused,
                 v8::Local<v8::Context> context, void* priv) {
   v8::Isolate* isolate = context->GetIsolate();
   mate::Dictionary dict(isolate, exports);
+  dict.Set("Session", Session::GetConstructor(isolate)->GetFunction());
   dict.SetMethod("fromPartition", &FromPartition);
-  dict.SetMethod("_setWrapSession", &atom::api::SetWrapSession);
 }
 
 }  // namespace

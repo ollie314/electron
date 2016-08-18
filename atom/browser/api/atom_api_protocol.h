@@ -28,6 +28,9 @@ namespace atom {
 
 namespace api {
 
+std::vector<std::string> GetStandardSchemes();
+void RegisterStandardSchemes(const std::vector<std::string>& schemes);
+
 class Protocol : public mate::TrackableObject<Protocol> {
  public:
   using Handler =
@@ -39,7 +42,7 @@ class Protocol : public mate::TrackableObject<Protocol> {
       v8::Isolate* isolate, AtomBrowserContext* browser_context);
 
   static void BuildPrototype(v8::Isolate* isolate,
-                             v8::Local<v8::ObjectTemplate> prototype);
+                             v8::Local<v8::FunctionTemplate> prototype);
 
  protected:
   Protocol(v8::Isolate* isolate, AtomBrowserContext* browser_context);
