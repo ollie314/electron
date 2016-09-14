@@ -492,6 +492,21 @@ Sends an input `event` to the page.
 See [webContents.sendInputEvent](web-contents.md#webcontentssendinputeventevent)
 for detailed description of `event` object.
 
+### `<webview>.setZoomFactor(factor)`
+
+* `factor` Number - Zoom factor.
+
+Changes the zoom factor to the specified factor. Zoom factor is
+zoom percent divided by 100, so 300% = 3.0.
+
+### `<webview>.setZoomLevel(level)`
+
+* `level` Number - Zoom level
+
+Changes the zoom level to the specified level. The original size is 0 and each
+increment above or below represents zooming 20% larger or smaller to default
+limits of 300% and 50% of original size, respectively.
+
 ### `<webview>.showDefinitionForSelection()` _macOS_
 
 Shows pop-up dictionary that searches the selected word on the page.
@@ -631,10 +646,9 @@ Returns:
 
 * `result` Object
   * `requestId` Integer
-  * `finalUpdate` Boolean - Indicates if more responses are to follow.
-  * `activeMatchOrdinal` Integer (optional) - Position of the active match.
-  * `matches` Integer (optional) - Number of Matches.
-  * `selectionArea` Object (optional) - Coordinates of first match region.
+  * `activeMatchOrdinal` Integer - Position of the active match.
+  * `matches` Integer - Number of Matches.
+  * `selectionArea` Object - Coordinates of first match region.
 
 Fired when a result is available for
 [`webview.findInPage`](web-view-tag.md#webviewtagfindinpage) request.
@@ -642,7 +656,7 @@ Fired when a result is available for
 ```javascript
 const webview = document.getElementById('foo')
 webview.addEventListener('found-in-page', (e) => {
-  if (e.result.finalUpdate) webview.stopFindInPage('keepSelection')
+  webview.stopFindInPage('keepSelection')
 })
 
 const requestId = webview.findInPage('test')

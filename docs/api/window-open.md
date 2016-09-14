@@ -38,6 +38,8 @@ origin preference.
 
 ## Class: BrowserWindowProxy
 
+> Manipulate the child browser window
+
 The `BrowserWindowProxy` object is returned from `window.open` and provides
 limited functionality with the child window.
 
@@ -52,10 +54,6 @@ Removes focus from the child window.
 #### `win.close()`
 
 Forcefully closes the child window without calling its unload event.
-
-#### `win.closed`
-
-Set to true after the child window gets closed.
 
 #### `win.eval(code)`
 
@@ -81,3 +79,11 @@ origin preference.
 
 In addition to these methods, the child window implements `window.opener` object
 with no properties and a single method.
+
+### Instance Properties
+
+The `BrowserWindowProxy` object has the following instance properties:
+
+#### `win.closed`
+
+Set to true after the child window gets closed.

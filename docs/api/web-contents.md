@@ -29,15 +29,23 @@ console.log(webContents)
 
 ### `webContents.getAllWebContents()`
 
-Returns an array of all web contents. This will contain web contents for all
-windows, webviews, opened devtools, and devtools extension background pages.
+Returns an array of all `WebContents` instances. This will contain web contents
+for all windows, webviews, opened devtools, and devtools extension background pages.
 
 ### `webContents.getFocusedWebContents()`
 
 Returns the web contents that is focused in this application, otherwise
 returns `null`.
 
+### `webContents.fromId(id)`
+
+* `id` Integer
+
+Find a `WebContents` instance according to its ID.
+
 ## Class: WebContents
+
+> Render and control the contents of a BrowserWindow instance.
 
 ### Instance Events
 
@@ -294,10 +302,9 @@ Returns:
 * `event` Event
 * `result` Object
   * `requestId` Integer
-  * `finalUpdate` Boolean - Indicates if more responses are to follow.
-  * `activeMatchOrdinal` Integer (optional) - Position of the active match.
-  * `matches` Integer (optional) - Number of Matches.
-  * `selectionArea` Object (optional) - Coordinates of first match region.
+  * `activeMatchOrdinal` Integer - Position of the active match.
+  * `matches` Integer - Number of Matches.
+  * `selectionArea` Object - Coordinates of first match region.
 
 Emitted when a result is available for
 [`webContents.findInPage`](web-contents.md#webcontentsfindinpage) request.
@@ -493,7 +500,7 @@ win.loadURL('http://github.com')
   * `userAgent` String - A user agent originating the request.
   * `extraHeaders` String - Extra headers separated by "\n"
 
-Loads the `url` in the window, the `url` must contain the protocol prefix,
+Loads the `url` in the window. The `url` must contain the protocol prefix,
 e.g. the `http://` or `file://`. If the load should bypass http cache then
 use the `pragma` header to achieve it.
 
@@ -694,7 +701,7 @@ Executes the editing command `cut` in web page.
 
 Executes the editing command `copy` in web page.
 
-### `contents.copyImageAt(x, y)`
+#### `contents.copyImageAt(x, y)`
 
 * `x` Integer
 * `y` Integer
@@ -822,6 +829,8 @@ up system's default printer and default settings for printing.
 Calling `window.print()` in web page is equivalent to calling
 `webContents.print({silent: false, printBackground: false})`.
 
+Use `page-break-before: always; ` CSS style to force to print to a new page.
+
 #### `contents.printToPDF(options, callback)`
 
 * `options` Object
@@ -851,6 +860,8 @@ By default, an empty `options` will be regarded as:
   landscape: false
 }
 ```
+
+Use `page-break-before: always; ` CSS style to force to print to a new page.
 
 An example of `webContents.printToPDF`:
 
@@ -933,7 +944,6 @@ Opens the developer tools for the service worker context.
 #### `contents.send(channel[, arg1][, arg2][, ...])`
 
 * `channel` String
-* `arg` (optional)
 
 Send an asynchronous message to renderer process via `channel`, you can also
 send arbitrary arguments. Arguments will be serialized in JSON internally and
@@ -973,32 +983,31 @@ app.on('ready', () => {
 
 #### `contents.enableDeviceEmulation(parameters)`
 
-`parameters` Object, properties:
-
-* `screenPosition` String - Specify the screen type to emulate
-    (default: `desktop`)
-  * `desktop`
-  * `mobile`
-* `screenSize` Object - Set the emulated screen size (screenPosition == mobile)
-  * `width` Integer - Set the emulated screen width
-  * `height` Integer - Set the emulated screen height
-* `viewPosition` Object - Position the view on the screen
-    (screenPosition == mobile) (default: `{x: 0, y: 0}`)
-  * `x` Integer - Set the x axis offset from top left corner
-  * `y` Integer - Set the y axis offset from top left corner
-* `deviceScaleFactor` Float - Set the device scale factor (if zero defaults to
-    original device scale factor) (default: `0`)
-* `viewSize` Object - Set the emulated view size (empty means no override)
-  * `width` Integer - Set the emulated view width
-  * `height` Integer - Set the emulated view height
-* `fitToView` Boolean - Whether emulated view should be scaled down if
-    necessary to fit into available space (default: `false`)
-* `offset` Object - Offset of the emulated view inside available space (not in
-    fit to view mode) (default: `{x: 0, y: 0}`)
-  * `x` Float - Set the x axis offset from top left corner
-  * `y` Float - Set the y axis offset from top left corner
-* `scale` Float - Scale of emulated view inside available space (not in fit to
-    view mode) (default: `1`)
+* `parameters` Object
+  * `screenPosition` String - Specify the screen type to emulate
+      (default: `desktop`)
+    * `desktop` String - Desktop screen type
+    * `mobile` String - Mobile screen type
+  * `screenSize` Object - Set the emulated screen size (screenPosition == mobile)
+    * `width` Integer - Set the emulated screen width
+    * `height` Integer - Set the emulated screen height
+  * `viewPosition` Object - Position the view on the screen
+      (screenPosition == mobile) (default: `{x: 0, y: 0}`)
+    * `x` Integer - Set the x axis offset from top left corner
+    * `y` Integer - Set the y axis offset from top left corner
+  * `deviceScaleFactor` Integer - Set the device scale factor (if zero defaults to
+      original device scale factor) (default: `0`)
+  * `viewSize` Object - Set the emulated view size (empty means no override)
+    * `width` Integer - Set the emulated view width
+    * `height` Integer - Set the emulated view height
+  * `fitToView` Boolean - Whether emulated view should be scaled down if
+      necessary to fit into available space (default: `false`)
+  * `offset` Object - Offset of the emulated view inside available space (not in
+      fit to view mode) (default: `{x: 0, y: 0}`)
+    * `x` Float - Set the x axis offset from top left corner
+    * `y` Float - Set the y axis offset from top left corner
+  * `scale` Float - Scale of emulated view inside available space (not in fit to
+      view mode) (default: `1`)
 
 Enable device emulation with the given parameters.
 
@@ -1128,6 +1137,8 @@ If *offscreen rendering* is enabled returns whether it is currently painting.
 
 #### `contents.setFrameRate(fps)`
 
+* `fps` Integer
+
 If *offscreen rendering* is enabled sets the frame rate to the specified number.
 Only values between 1 and 60 are accepted.
 
@@ -1162,7 +1173,10 @@ Get the debugger instance for this webContents.
 
 ## Class: Debugger
 
-Debugger API serves as an alternate transport for [remote debugging protocol][rdp].
+> An alternate transport for Chrome's remote debugging protocol.
+
+Chrome Developer Tools has a [special binding][rdp] available at JavaScript
+runtime that allows interacting with pages and instrumenting them.
 
 ```javascript
 const {BrowserWindow} = require('electron')

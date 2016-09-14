@@ -11,8 +11,8 @@
 #include "atom/common/api/locker.h"
 #include "atom/common/atom_command_line.h"
 #include "atom/common/native_mate_converters/file_path_converter.h"
-#include "base/command_line.h"
 #include "base/base_paths.h"
+#include "base/command_line.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/message_loop/message_loop.h"
@@ -169,10 +169,11 @@ node::Environment* NodeBindings::CreateEnvironment(
       context->GetIsolate(), uv_default_loop(), context,
       args.size(), c_argv.get(), 0, nullptr);
 
-  // Node turns off AutorunMicrotasks, but we need it in web pages to match the
-  // behavior of Chrome.
-  if (!is_browser_)
-    context->GetIsolate()->SetAutorunMicrotasks(true);
+  // Node uses the deprecated SetAutorunMicrotasks(false) mode, we should switch
+  // to use the scoped policy to match blink's behavior.
+  if (!is_browser_) {
+    context->GetIsolate()->SetMicrotasksPolicy(v8::MicrotasksPolicy::kScoped);
+  }
 
   mate::Dictionary process(context->GetIsolate(), env->process_object());
   process.Set("type", process_type);
@@ -184,6 +185,13 @@ node::Environment* NodeBindings::CreateEnvironment(
   base::FilePath helper_exec_path;
   PathService::Get(content::CHILD_PROCESS_EXE, &helper_exec_path);
   process.Set("helperExecPath", helper_exec_path);
+
+  // Set process._debugWaitConnect if --debug-brk was specified to stop
+  // the debugger on the first line
+  if (is_browser_ &&
+      base::CommandLine::ForCurrentProcess()->HasSwitch("debug-brk"))
+    process.Set("_debugWaitConnect", true);
+
   return env;
 }
 

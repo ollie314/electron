@@ -14,7 +14,11 @@ win.on('closed', () => {
   win = null
 })
 
+// Load a remote URL
 win.loadURL('https://github.com')
+
+// Or load a local HTML file
+win.loadURL(`file://${__dirname}/app/index.html`)
 ```
 
 ## Frameless window
@@ -217,10 +221,10 @@ Possible values of the `titleBarStyle` option are:
   the top left.
 * `hidden-inset` results in a hidden title bar with an alternative look
   where the traffic light buttons are slightly more inset from the window edge.
-  It is not supported on macOS 10.9 Mavericks, where it falls back to `hidden`.
 
 The `webPreferences` option is an object that can have the following properties:
 
+* `devTools` Boolean - Whether to enable DevTools. If it is set to `false`, can not use `BrowserWindow.webContents.openDevTools()` to open DevTools. Default is `true`.
 * `nodeIntegration` Boolean - Whether node integration is enabled. Default
   is `true`.
 * `preload` String - Specifies a script that will be loaded before other
@@ -940,11 +944,41 @@ Whether the window's document has been edited.
 
 #### `win.capturePage([rect, ]callback)`
 
+* `rect` Object (optional) - The area of the page to be captured
+  * `x` Integer
+  * `y` Integer
+  * `width` Integer
+  * `height` Integer
+* `callback` Function
+
 Same as `webContents.capturePage([rect, ]callback)`.
 
 #### `win.loadURL(url[, options])`
 
+* `url` URL
+* `options` Object (optional)
+  * `httpReferrer` String - A HTTP Referrer url.
+  * `userAgent` String - A user agent originating the request.
+  * `extraHeaders` String - Extra headers separated by "\n"
+
 Same as `webContents.loadURL(url[, options])`.
+
+The `url` can be a remote address (e.g. `http://`) or a path to a local
+HTML file using the `file://` protocol.
+
+To ensure that file URLs are properly formatted, it is recommended to use
+Node's [`url.format`](https://nodejs.org/api/url.html#url_url_format_urlobject)
+method:
+
+```javascript
+let url = require('url').format({
+  protocol: 'file',
+  slashes: true,
+  pathname: require('path').join(__dirname, 'index.html')
+})
+
+win.loadURL(url)
+```
 
 #### `win.reload()`
 
@@ -972,7 +1006,7 @@ On Linux platform, only supports Unity desktop environment, you need to specify
 the `*.desktop` file name to `desktopName` field in `package.json`. By default,
 it will assume `app.getName().desktop`.
 
-On Windows, a mode can be passed. Accepted values are `none`, `normal`, 
+On Windows, a mode can be passed. Accepted values are `none`, `normal`,
 `indeterminate`, `error`, and `paused`. If you call `setProgressBar` without a
 mode set (but with a value within the valid range), `normal` will be assumed.
 
@@ -1037,7 +1071,7 @@ The `flags` is an array that can include following `String`s:
 
 #### `win.setThumbnailClip(region)` _Windows_
 
-* `region` - Object
+* `region` Object - Region of the window
   * `x` Integer - x-position of region
   * `y` Integer - y-position of region
   * `width` Integer - width of region
@@ -1115,6 +1149,8 @@ this window, but if this window has focus, it will still receive keyboard
 events.
 
 #### `win.setContentProtection(enable)` _macOS_ _Windows_
+
+* `enable` Boolean
 
 Prevents the window contents from being captured by other apps.
 

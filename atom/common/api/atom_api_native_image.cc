@@ -11,27 +11,28 @@
 #include "atom/common/native_mate_converters/file_path_converter.h"
 #include "atom/common/native_mate_converters/gfx_converter.h"
 #include "atom/common/native_mate_converters/gurl_converter.h"
-#include "atom/common/node_includes.h"
 #include "base/base64.h"
 #include "base/files/file_util.h"
-#include "base/strings/string_util.h"
 #include "base/strings/pattern.h"
+#include "base/strings/string_util.h"
 #include "native_mate/dictionary.h"
 #include "native_mate/object_template_builder.h"
 #include "net/base/data_url.h"
+#include "third_party/skia/include/core/SkPixelRef.h"
 #include "ui/base/layout.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_util.h"
-#include "third_party/skia/include/core/SkPixelRef.h"
 
 #if defined(OS_WIN)
 #include "atom/common/asar/archive.h"
 #include "base/win/scoped_gdi_object.h"
 #include "ui/gfx/icon_util.h"
 #endif
+
+#include "atom/common/node_includes.h"
 
 namespace atom {
 

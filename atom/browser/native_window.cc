@@ -18,11 +18,11 @@
 #include "atom/common/options_switches.h"
 #include "base/files/file_util.h"
 #include "base/json/json_writer.h"
-#include "components/prefs/pref_service.h"
 #include "base/message_loop/message_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brightray/browser/inspectable_web_contents.h"
 #include "brightray/browser/inspectable_web_contents_view.h"
+#include "components/prefs/pref_service.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/plugin_service.h"
@@ -33,6 +33,7 @@
 #include "content/public/common/content_switches.h"
 #include "ipc/ipc_message_macros.h"
 #include "native_mate/dictionary.h"
+#include "third_party/skia/include/core/SkRegion.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -405,7 +406,7 @@ void NativeWindow::CloseContents(content::WebContents* source) {
   Observe(nullptr);
 
   FOR_EACH_OBSERVER(NativeWindowObserver, observers_,
-                    WillDestoryNativeObject());
+                    WillDestroyNativeObject());
 
   // When the web contents is gone, close the window immediately, but the
   // memory will not be freed until you call delete.

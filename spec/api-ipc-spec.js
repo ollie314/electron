@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('assert')
+const http = require('http')
 const path = require('path')
 const {closeWindow} = require('./window-helpers')
 
@@ -50,6 +51,34 @@ describe('ipc module', function () {
     it('should search module from the user app', function () {
       comparePaths(path.normalize(remote.process.mainModule.filename), path.resolve(__dirname, 'static', 'main.js'))
       comparePaths(path.normalize(remote.process.mainModule.paths[0]), path.resolve(__dirname, 'static', 'node_modules'))
+    })
+
+    it('should work with function properties', function () {
+      var a = remote.require(path.join(fixtures, 'module', 'export-function-with-properties.js'))
+      assert.equal(typeof a, 'function')
+      assert.equal(a.bar, 'baz')
+
+      a = remote.require(path.join(fixtures, 'module', 'function-with-properties.js'))
+      assert.equal(typeof a, 'object')
+      assert.equal(a.foo(), 'hello')
+      assert.equal(a.foo.bar, 'baz')
+      assert.equal(a.foo.nested.prop, 'yes')
+      assert.equal(a.foo.method1(), 'world')
+      assert.equal(a.foo.method1.prop1(), 123)
+
+      assert.ok(Object.keys(a.foo).includes('bar'))
+      assert.ok(Object.keys(a.foo).includes('nested'))
+      assert.ok(Object.keys(a.foo).includes('method1'))
+    })
+
+    it('should work with static class members', function () {
+      var a = remote.require(path.join(fixtures, 'module', 'remote-static.js'))
+      assert.equal(typeof a.Foo, 'function')
+      assert.equal(a.Foo.foo(), 3)
+      assert.equal(a.Foo.bar, 'baz')
+
+      var foo = new a.Foo()
+      assert.equal(foo.baz(), 123)
     })
 
     it('handles circular references in arrays and objects', function () {
@@ -120,6 +149,11 @@ describe('ipc module', function () {
       assert.equal(property.property, 1127)
       property.property = 1007
       assert.equal(property.property, 1007)
+      assert.equal(property.getFunctionProperty(), 'foo-browser')
+      property.func.property = 'bar'
+      assert.equal(property.getFunctionProperty(), 'bar-browser')
+      property.func.property = 'foo'  // revert back
+
       var property2 = remote.require(path.join(fixtures, 'module', 'property.js'))
       assert.equal(property2.property, 1007)
       property.property = 1127
@@ -163,10 +197,23 @@ describe('ipc module', function () {
       assert.deepEqual(printName.echo(now), now)
     })
 
+    it('supports instanceof Buffer', function () {
+      const buffer = Buffer.from('test')
+      assert.ok(buffer.equals(printName.echo(buffer)))
+
+      const objectWithBuffer = {a: 'foo', b: Buffer.from('bar')}
+      assert.ok(objectWithBuffer.b.equals(printName.echo(objectWithBuffer).b))
+
+      const arrayWithBuffer = [1, 2, Buffer.from('baz')]
+      assert.ok(arrayWithBuffer[2].equals(printName.echo(arrayWithBuffer)[2]))
+    })
+
     it('supports TypedArray', function () {
       const values = [1, 2, 3, 4]
-      const typedArray = printName.typedArray(values)
-      assert.deepEqual(values, typedArray)
+      assert.deepEqual(printName.typedArray(values), values)
+
+      const int16values = new Int16Array([1, 2, 3, 4])
+      assert.deepEqual(printName.typedArray(int16values), int16values)
     })
   })
 
@@ -286,13 +333,22 @@ describe('ipc module', function () {
       ipcRenderer.send('message', obj)
     })
 
-    it('can send instance of Date', function (done) {
+    it('can send instances of Date', function (done) {
       const currentDate = new Date()
       ipcRenderer.once('message', function (event, value) {
         assert.equal(value, currentDate.toISOString())
         done()
       })
       ipcRenderer.send('message', currentDate)
+    })
+
+    it('can send instances of Buffer', function (done) {
+      const buffer = Buffer.from('hello')
+      ipcRenderer.once('message', function (event, message) {
+        assert.ok(buffer.equals(message))
+        done()
+      })
+      ipcRenderer.send('message', buffer)
     })
 
     it('can send objects with DOM class prototypes', function (done) {
@@ -302,6 +358,64 @@ describe('ipc module', function () {
         done()
       })
       ipcRenderer.send('message', document.location)
+    })
+
+    it('can send Electron API objects', function (done) {
+      const webContents = remote.getCurrentWebContents()
+      ipcRenderer.once('message', function (event, value) {
+        assert.deepEqual(value.browserWindowOptions, webContents.browserWindowOptions)
+        done()
+      })
+      ipcRenderer.send('message', webContents)
+    })
+
+    it('does not crash on external objects (regression)', function (done) {
+      const request = http.request({port: 5000, hostname: '127.0.0.1', method: 'GET', path: '/'})
+      const stream = request.agent.sockets['127.0.0.1:5000:'][0]._handle._externalStream
+      request.on('error', function () {})
+      ipcRenderer.once('message', function (event, requestValue, externalStreamValue) {
+        assert.equal(requestValue.method, 'GET')
+        assert.equal(requestValue.path, '/')
+        assert.equal(externalStreamValue, null)
+        done()
+      })
+
+      ipcRenderer.send('message', request, stream)
+    })
+
+    it('can send objects that both reference the same object', function (done) {
+      const child = {hello: 'world'}
+      const foo = {name: 'foo', child: child}
+      const bar = {name: 'bar', child: child}
+      const array = [foo, bar]
+
+      ipcRenderer.once('message', function (event, arrayValue, fooValue, barValue, childValue) {
+        assert.deepEqual(arrayValue, array)
+        assert.deepEqual(fooValue, foo)
+        assert.deepEqual(barValue, bar)
+        assert.deepEqual(childValue, child)
+        done()
+      })
+      ipcRenderer.send('message', array, foo, bar, child)
+    })
+
+    it('inserts null for cyclic references', function (done) {
+      const array = [5]
+      array.push(array)
+
+      const child = {hello: 'world'}
+      child.child = child
+
+      ipcRenderer.once('message', function (event, arrayValue, childValue) {
+        assert.equal(arrayValue[0], 5)
+        assert.equal(arrayValue[1], null)
+
+        assert.equal(childValue.hello, 'world')
+        assert.equal(childValue.child, null)
+
+        done()
+      })
+      ipcRenderer.send('message', array, child)
     })
   })
 

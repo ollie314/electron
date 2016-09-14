@@ -20,13 +20,15 @@ The `shell` module has the following methods:
 
 * `fullPath` String
 
-Show the given file in a file manager. If possible, select the file.
+Show the given file in a file manager. If possible, select the file. Returns
+true if the item was successfully shown, false otherwise.
 
 ### `shell.openItem(fullPath)`
 
 * `fullPath` String
 
-Open the given file in the desktop's default manner.
+Open the given file in the desktop's default manner. Returns true if the item
+was successfully opened, false otherwise.
 
 ### `shell.openExternal(url[, options])`
 
@@ -44,6 +46,7 @@ application was available to open the URL, false otherwise.
 * `fullPath` String
 
 Move the given file to trash and returns a boolean status for the operation.
+Returns true if the item was successfully moved to the trash, false otherwise.
 
 ### `shell.beep()`
 
@@ -78,7 +81,9 @@ returned, otherwise `false` is returned.
 
 ### `shell.readShortcutLink(shortcutPath)` _Windows_
 
-Resolves the shortcut link at `shortcutPath`, an object is returned with the
+* `shortcutPath` String
+
+Resolves the shortcut link at `shortcutPath`. An object is returned with the
 fields described in the `options` of `shell.writeShortcutLink`.
 
 An exception will be thrown when any error happens.

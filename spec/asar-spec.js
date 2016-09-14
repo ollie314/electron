@@ -744,6 +744,14 @@ describe('asar package', function () {
           fs.readdirSync(asar)
         }, /ENOTDIR/)
       })
+
+      it('is reset to its original value when execSync throws an error', function () {
+        process.noAsar = false
+        assert.throws(function () {
+          ChildProcess.execSync(path.join(__dirname, 'does-not-exist.txt'))
+        })
+        assert.equal(process.noAsar, false)
+      })
     })
   })
 
@@ -838,6 +846,36 @@ describe('asar package', function () {
       ipcMain.once('ping', function (event, message) {
         assert.equal(message, 'pong')
         done()
+      })
+    })
+
+    it('loads video tag in html', function (done) {
+      this.timeout(20000)
+
+      after(function () {
+        ipcMain.removeAllListeners('asar-video')
+        return closeWindow(w).then(function () { w = null })
+      })
+
+      var w = new BrowserWindow({
+        show: false,
+        width: 400,
+        height: 400
+      })
+      var p = path.resolve(fixtures, 'asar', 'video.asar', 'index.html')
+      var u = url.format({
+        protocol: 'file',
+        slashed: true,
+        pathname: p
+      })
+      w.loadURL(u)
+      ipcMain.on('asar-video', function (event, message, error) {
+        if (message === 'ended') {
+          assert(!error)
+          done()
+        } else if (message === 'error') {
+          done(error)
+        }
       })
     })
   })

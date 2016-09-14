@@ -13,7 +13,6 @@
 #include "atom/common/color_util.h"
 #include "atom/common/native_mate_converters/value_converter.h"
 #include "atom/common/node_bindings.h"
-#include "atom/common/node_includes.h"
 #include "atom/common/options_switches.h"
 #include "atom/renderer/atom_render_view_observer.h"
 #include "atom/renderer/guest_view_container.h"
@@ -34,12 +33,12 @@
 #include "third_party/WebKit/public/web/WebCustomElement.h"
 #include "third_party/WebKit/public/web/WebDocument.h"
 #include "third_party/WebKit/public/web/WebFrameWidget.h"
+#include "third_party/WebKit/public/web/WebKit.h"
 #include "third_party/WebKit/public/web/WebLocalFrame.h"
 #include "third_party/WebKit/public/web/WebPluginParams.h"
-#include "third_party/WebKit/public/web/WebKit.h"
+#include "third_party/WebKit/public/web/WebRuntimeFeatures.h"
 #include "third_party/WebKit/public/web/WebScriptSource.h"
 #include "third_party/WebKit/public/web/WebSecurityPolicy.h"
-#include "third_party/WebKit/public/web/WebRuntimeFeatures.h"
 #include "third_party/WebKit/public/web/WebView.h"
 
 #if defined(OS_MACOSX)
@@ -50,6 +49,8 @@
 #if defined(OS_WIN)
 #include <shlobj.h>
 #endif
+
+#include "atom/common/node_includes.h"
 
 namespace atom {
 
@@ -83,6 +84,10 @@ class AtomRenderFrameObserver : public content::RenderFrameObserver {
     if (world_id_ != world_id)
       return;
     renderer_client_->WillReleaseScriptContext(context, render_frame_);
+  }
+
+  void OnDestruct() override {
+    delete this;
   }
 
  private:

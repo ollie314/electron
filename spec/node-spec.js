@@ -221,18 +221,38 @@ describe('node feature', function () {
   })
 
   describe('process.stdout', function () {
-    it('should not throw exception', function () {
-      process.stdout
+    it('does not throw an exception when accessed', function () {
+      assert.doesNotThrow(function () {
+        process.stdout
+      })
     })
 
-    it('should not throw exception when calling write()', function () {
-      process.stdout.write('test')
+    it('does not throw an exception when calling write()', function () {
+      assert.doesNotThrow(function () {
+        process.stdout.write('test')
+      })
     })
 
-    it('should have isTTY defined', function () {
+    it('should have isTTY defined on Mac and Linux', function () {
       if (isCI) return
 
-      assert.equal(typeof process.stdout.isTTY, 'boolean')
+      if (process.platform === 'win32') {
+        assert.equal(process.stdout.isTTY, undefined)
+      } else {
+        assert.equal(typeof process.stdout.isTTY, 'boolean')
+      }
+    })
+  })
+
+  describe('process.stdin', function () {
+    it('does not throw an exception when accessed', function () {
+      assert.doesNotThrow(function () {
+        process.stdin
+      })
+    })
+
+    it('returns null when read from', function () {
+      assert.equal(process.stdin.read(), null)
     })
   })
 

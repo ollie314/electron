@@ -21,7 +21,7 @@ console.log(ses.getUserAgent())
 
 The `session` module has the following methods:
 
-### session.fromPartition(partition[, options])
+### `session.fromPartition(partition[, options])`
 
 * `partition` String
 * `options` Object
@@ -44,11 +44,13 @@ of an existing `Session` object.
 
 The `session` module has the following properties:
 
-### session.defaultSession
+### `session.defaultSession`
 
 Returns the default session object of the app.
 
 ## Class: Session
+
+> Get and set properties of a session.
 
 You can create a `Session` object in the `session` module:
 
@@ -212,10 +214,14 @@ Sets download saving directory. By default, the download directory will be the
 #### `ses.enableNetworkEmulation(options)`
 
 * `options` Object
-  * `offline` Boolean - Whether to emulate network outage.
-  * `latency` Double - RTT in ms
-  * `downloadThroughput` Double - Download rate in Bps
-  * `uploadThroughput` Double - Upload rate in Bps
+  * `offline` Boolean (optional) - Whether to emulate network outage. Defaults
+    to false.
+  * `latency` Double (optional) - RTT in ms. Defaults to 0 which will disable
+    latency throttling.
+  * `downloadThroughput` Double (optional) - Download rate in Bps. Defaults to 0
+    which will disable download throttling.
+  * `uploadThroughput` Double (optional) - Upload rate in Bps. Defaults to 0
+    which will disable upload throttling.
 
 Emulates network with the given configuration for the `session`.
 
@@ -353,8 +359,10 @@ app.on('ready', function () {
 
 ## Class: Cookies
 
-The `Cookies` class gives you ability to query and modify cookies. Instances of
-`Cookies` class must be received by using `cookies` property of `Session` class.
+> Query and modify a session's cookies.
+
+Instances of the `Cookies` class are accessed by using `cookies` property of
+a `Session`.
 
 For example:
 
@@ -446,21 +454,22 @@ Removes the cookies matching `url` and `name`, `callback` will called with
 
 ## Class: WebRequest
 
-The `WebRequest` class allows to intercept and modify contents of a request at
-various stages of its lifetime. Instances of `WebRequest` class must be received
-by using `webRequest` property of `Session` class.
+> Intercept and modify the contents of a request at various stages of its lifetime.
 
-The methods of `WebRequest` accept an optional `filter` and a `listener`, the
+Instances of the `WebRequest` class are accessed by using the `webRequest`
+property of a `Session`.
+
+The methods of `WebRequest` accept an optional `filter` and a `listener`. The
 `listener` will be called with `listener(details)` when the API's event has
-happened, the `details` is an object that describes the request. Passing `null`
+happened. The `details` object describes the request. Passing `null`
 as `listener` will unsubscribe from the event.
 
-The `filter` is an object that has an `urls` property, which is an Array of URL
+The `filter` object has a `urls` property which is an Array of URL
 patterns that will be used to filter out the requests that do not match the URL
 patterns. If the `filter` is omitted then all requests will be matched.
 
 For certain events the `listener` is passed with a `callback`, which should be
-called with an `response` object when `listener` has done its work.
+called with a `response` object when `listener` has done its work.
 
 An example of adding `User-Agent` header for requests:
 
@@ -554,7 +563,7 @@ response are visible by the time this listener is fired.
   * `timestamp` Double
   * `requestHeaders` Object
 
-#### `webRequest.onHeadersReceived([filter,]listener)`
+#### `webRequest.onHeadersReceived([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function

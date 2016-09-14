@@ -18,8 +18,8 @@
 #include "atom/browser/native_window.h"
 #include "atom/browser/net/atom_network_delegate.h"
 #include "atom/browser/osr/osr_output_device.h"
-#include "atom/browser/osr/osr_web_contents_view.h"
 #include "atom/browser/osr/osr_render_widget_host_view.h"
+#include "atom/browser/osr/osr_web_contents_view.h"
 #include "atom/browser/ui/drag_util.h"
 #include "atom/browser/web_contents_permission_helper.h"
 #include "atom/browser/web_contents_preferences.h"
@@ -37,14 +37,13 @@
 #include "atom/common/native_mate_converters/image_converter.h"
 #include "atom/common/native_mate_converters/string16_converter.h"
 #include "atom/common/native_mate_converters/value_converter.h"
-#include "atom/common/node_includes.h"
 #include "atom/common/options_switches.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brightray/browser/inspectable_web_contents.h"
 #include "brightray/browser/inspectable_web_contents_view.h"
-#include "chrome/browser/printing/print_view_manager_basic.h"
 #include "chrome/browser/printing/print_preview_message_handler.h"
+#include "chrome/browser/printing/print_view_manager_basic.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/view_messages.h"
@@ -61,21 +60,23 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/resource_request_details.h"
 #include "content/public/browser/service_worker_context.h"
-#include "content/public/browser/storage_partition.h"
 #include "content/public/browser/site_instance.h"
+#include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/context_menu_params.h"
 #include "native_mate/dictionary.h"
 #include "native_mate/object_template_builder.h"
 #include "net/http/http_response_headers.h"
 #include "net/url_request/url_request_context.h"
-#include "third_party/WebKit/public/web/WebInputEvent.h"
 #include "third_party/WebKit/public/web/WebFindOptions.h"
+#include "third_party/WebKit/public/web/WebInputEvent.h"
 #include "ui/display/screen.h"
 
 #if !defined(OS_MACOSX)
 #include "ui/aura/window.h"
 #endif
+
+#include "atom/common/node_includes.h"
 
 namespace {
 
@@ -261,7 +262,8 @@ WebContents::WebContents(v8::Isolate* isolate,
       embedder_(nullptr),
       type_(REMOTE),
       request_id_(0),
-      background_throttling_(true) {
+      background_throttling_(true),
+      enable_devtools_(true) {
   web_contents->SetUserAgentOverride(GetBrowserContext()->GetUserAgent());
 
   Init(isolate);
@@ -273,7 +275,8 @@ WebContents::WebContents(v8::Isolate* isolate,
     : embedder_(nullptr),
       type_(BROWSER_WINDOW),
       request_id_(0),
-      background_throttling_(true) {
+      background_throttling_(true),
+      enable_devtools_(true) {
   // Read options.
   options.Get("backgroundThrottling", &background_throttling_);
 
@@ -289,6 +292,9 @@ WebContents::WebContents(v8::Isolate* isolate,
     type_ = BACKGROUND_PAGE;
   else if (options.Get("offscreen", &b) && b)
     type_ = OFF_SCREEN;
+
+  // Whether to enable DevTools.
+  options.Get("devTools", &enable_devtools_);
 
   // Obtain the session.
   std::string partition;
@@ -522,22 +528,18 @@ void WebContents::FindReply(content::WebContents* web_contents,
                             const gfx::Rect& selection_rect,
                             int active_match_ordinal,
                             bool final_update) {
+  if (!final_update)
+    return;
+
   v8::Locker locker(isolate());
   v8::HandleScope handle_scope(isolate());
-
   mate::Dictionary result = mate::Dictionary::CreateEmpty(isolate());
-  if (number_of_matches == -1) {
-    result.Set("requestId", request_id);
-    result.Set("selectionArea", selection_rect);
-    result.Set("finalUpdate", final_update);
-    result.Set("activeMatchOrdinal", active_match_ordinal);
-    Emit("found-in-page", result);
-  } else if (final_update) {
-    result.Set("requestId", request_id);
-    result.Set("matches", number_of_matches);
-    result.Set("finalUpdate", final_update);
-    Emit("found-in-page", result);
-  }
+  result.Set("requestId", request_id);
+  result.Set("matches", number_of_matches);
+  result.Set("selectionArea", selection_rect);
+  result.Set("activeMatchOrdinal", active_match_ordinal);
+  result.Set("finalUpdate", final_update);  // Deprecate after 2.0
+  Emit("found-in-page", result);
 }
 
 bool WebContents::CheckMediaAccessPermission(
@@ -866,7 +868,8 @@ void WebContents::DownloadURL(const GURL& url) {
     content::BrowserContext::GetDownloadManager(browser_context);
 
   download_manager->DownloadUrl(
-    content::DownloadUrlParameters::FromWebContents(web_contents(), url));
+      content::DownloadUrlParameters::CreateForWebContentsMainFrame(
+          web_contents(), url));
 }
 
 GURL WebContents::GetURL() const {
@@ -940,6 +943,9 @@ void WebContents::OpenDevTools(mate::Arguments* args) {
   if (type_ == REMOTE)
     return;
 
+  if (!enable_devtools_)
+    return;
+
   std::string state;
   if (type_ == WEB_VIEW || !owner_window()) {
     state = "detach";
@@ -948,6 +954,8 @@ void WebContents::OpenDevTools(mate::Arguments* args) {
     mate::Dictionary options;
     if (args->GetNext(&options)) {
       options.Get("mode", &state);
+
+      // TODO(kevinsawicki) Remove in 2.0
       options.Get("detach", &detach);
       if (state.empty() && detach)
         state = "detach";
@@ -1004,7 +1012,11 @@ void WebContents::InspectElement(int x, int y) {
   if (type_ == REMOTE)
     return;
 
-  OpenDevTools(nullptr);
+  if (!enable_devtools_)
+    return;
+
+  if (!managed_web_contents()->GetDevToolsWebContents())
+    OpenDevTools(nullptr);
   scoped_refptr<content::DevToolsAgentHost> agent(
     content::DevToolsAgentHost::GetOrCreateFor(web_contents()));
   agent->InspectElement(x, y);
@@ -1012,6 +1024,9 @@ void WebContents::InspectElement(int x, int y) {
 
 void WebContents::InspectServiceWorker() {
   if (type_ == REMOTE)
+    return;
+
+  if (!enable_devtools_)
     return;
 
   for (const auto& agent_host : content::DevToolsAgentHost::GetOrCreateAll()) {
@@ -1160,7 +1175,7 @@ void WebContents::ShowDefinitionForSelection() {
 }
 
 void WebContents::CopyImageAt(int x, int y) {
-  const auto host = web_contents()->GetRenderViewHost();
+  const auto host = web_contents()->GetMainFrame();
   if (host)
     host->CopyImageAt(x, y);
 }
@@ -1175,7 +1190,7 @@ bool WebContents::IsFocused() const {
   if (!view) return false;
 
   if (GetType() != BACKGROUND_PAGE) {
-    auto window = web_contents()->GetTopLevelNativeWindow();
+    auto window = web_contents()->GetNativeView()->GetToplevelWindow();
     if (window && !window->IsVisible())
       return false;
   }

@@ -22,6 +22,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "native_mate/dictionary.h"
 #include "skia/ext/skia_utils_mac.h"
+#include "third_party/skia/include/core/SkRegion.h"
 #include "ui/gfx/skia_util.h"
 
 namespace {
@@ -191,7 +192,8 @@ bool ScopedDisableResize::disable_resize_ = false;
 - (void)windowWillEnterFullScreen:(NSNotification*)notification {
   // Hide the native toolbar before entering fullscreen, so there is no visual
   // artifacts.
-  if (shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET) {
+  if (base::mac::IsOSYosemiteOrLater() &&
+      shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET) {
     NSWindow* window = shell_->GetNativeWindow();
     [window setToolbar:nil];
   }
@@ -214,7 +216,8 @@ bool ScopedDisableResize::disable_resize_ = false;
 
   // Restore the native toolbar immediately after entering fullscreen, if we do
   // this before leaving fullscreen, traffic light buttons will be jumping.
-  if (shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET) {
+  if (base::mac::IsOSYosemiteOrLater() &&
+      shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET) {
     base::scoped_nsobject<NSToolbar> toolbar(
         [[NSToolbar alloc] initWithIdentifier:@"titlebarStylingToolbar"]);
     [toolbar setShowsBaselineSeparator:NO];
@@ -236,8 +239,10 @@ bool ScopedDisableResize::disable_resize_ = false;
   }
 
   // Turn off the style for toolbar.
-  if (shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET)
+  if (base::mac::IsOSYosemiteOrLater() &&
+      shell_->title_bar_style() == atom::NativeWindowMac::HIDDEN_INSET) {
     shell_->SetStyleMask(false, NSFullSizeContentViewWindowMask);
+  }
 }
 
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
@@ -276,13 +281,16 @@ bool ScopedDisableResize::disable_resize_ = false;
  @private
   atom::NativeWindowMac* shell_;
   bool enable_larger_than_screen_;
+  CGFloat windowButtonsInterButtonSpacing_;
 }
 @property BOOL acceptsFirstMouse;
 @property BOOL disableAutoHideCursor;
 @property BOOL disableKeyOrMainWindow;
+@property NSPoint windowButtonsOffset;
 
 - (void)setShell:(atom::NativeWindowMac*)shell;
 - (void)setEnableLargerThanScreen:(bool)enable;
+- (void)enableWindowButtonsOffset;
 @end
 
 @implementation AtomNSWindow
@@ -356,6 +364,86 @@ bool ScopedDisableResize::disable_resize_ = false;
   return !self.disableKeyOrMainWindow;
 }
 
+- (void)enableWindowButtonsOffset {
+  auto closeButton = [self standardWindowButton:NSWindowCloseButton];
+  auto miniaturizeButton = [self standardWindowButton:NSWindowMiniaturizeButton];
+  auto zoomButton = [self standardWindowButton:NSWindowZoomButton];
+
+  [closeButton setPostsFrameChangedNotifications:YES];
+  [miniaturizeButton setPostsFrameChangedNotifications:YES];
+  [zoomButton setPostsFrameChangedNotifications:YES];
+
+  windowButtonsInterButtonSpacing_ =
+    NSMinX([miniaturizeButton frame]) - NSMaxX([closeButton frame]);
+
+  auto center = [NSNotificationCenter defaultCenter];
+
+  [center addObserver:self
+             selector:@selector(adjustCloseButton:)
+                 name:NSViewFrameDidChangeNotification
+               object:closeButton];
+
+  [center addObserver:self
+             selector:@selector(adjustMiniaturizeButton:)
+                 name:NSViewFrameDidChangeNotification
+               object:miniaturizeButton];
+
+  [center addObserver:self
+             selector:@selector(adjustZoomButton:)
+                 name:NSViewFrameDidChangeNotification
+               object:zoomButton];
+}
+
+- (void)adjustCloseButton:(NSNotification*)notification {
+  [self adjustButton:[notification object]
+              ofKind:NSWindowCloseButton];
+}
+
+- (void)adjustMiniaturizeButton:(NSNotification*)notification {
+  [self adjustButton:[notification object]
+              ofKind:NSWindowMiniaturizeButton];
+}
+
+- (void)adjustZoomButton:(NSNotification*)notification {
+  [self adjustButton:[notification object]
+              ofKind:NSWindowZoomButton];
+}
+
+- (void)adjustButton:(NSButton*)button
+              ofKind:(NSWindowButton)kind {
+  NSRect buttonFrame = [button frame];
+  NSRect frameViewBounds = [[self frameView] bounds];
+  NSPoint offset = self.windowButtonsOffset;
+
+  buttonFrame.origin = NSMakePoint(
+    offset.x,
+    (NSHeight(frameViewBounds) - NSHeight(buttonFrame) - offset.y));
+
+  switch (kind) {
+    case NSWindowZoomButton:
+      buttonFrame.origin.x += NSWidth(
+        [[self standardWindowButton:NSWindowMiniaturizeButton] frame]);
+      buttonFrame.origin.x += windowButtonsInterButtonSpacing_;
+      // fallthrough
+    case NSWindowMiniaturizeButton:
+      buttonFrame.origin.x += NSWidth(
+        [[self standardWindowButton:NSWindowCloseButton] frame]);
+      buttonFrame.origin.x += windowButtonsInterButtonSpacing_;
+      // fallthrough
+    default:
+      break;
+  }
+
+  BOOL didPost = [button postsBoundsChangedNotifications];
+  [button setPostsFrameChangedNotifications:NO];
+  [button setFrame:buttonFrame];
+  [button setPostsFrameChangedNotifications:didPost];
+}
+
+- (NSView*)frameView {
+  return [[self contentView] superview];
+}
+
 @end
 
 @interface ControlRegionView : NSView
@@ -423,11 +511,7 @@ struct Converter<atom::NativeWindowMac::TitleBarStyle> {
       *out = atom::NativeWindowMac::HIDDEN;
     } else if (title_bar_style == "hidden-inset" ||  // Deprecate this after 2.0
                title_bar_style == "hiddenInset") {
-      if (base::mac::IsOSYosemiteOrLater()) {
-        *out = atom::NativeWindowMac::HIDDEN_INSET;
-      } else {
-        *out = atom::NativeWindowMac::HIDDEN;
-      }
+      *out = atom::NativeWindowMac::HIDDEN_INSET;
     } else {
       return false;
     }
@@ -550,11 +634,16 @@ NativeWindowMac::NativeWindowMac(
 
   // Hide the title bar.
   if (title_bar_style_ == HIDDEN_INSET) {
-    [window_ setTitlebarAppearsTransparent:YES];
-    base::scoped_nsobject<NSToolbar> toolbar(
-        [[NSToolbar alloc] initWithIdentifier:@"titlebarStylingToolbar"]);
-    [toolbar setShowsBaselineSeparator:NO];
-    [window_ setToolbar:toolbar];
+    if (base::mac::IsOSYosemiteOrLater()) {
+      [window_ setTitlebarAppearsTransparent:YES];
+      base::scoped_nsobject<NSToolbar> toolbar(
+          [[NSToolbar alloc] initWithIdentifier:@"titlebarStylingToolbar"]);
+      [toolbar setShowsBaselineSeparator:NO];
+      [window_ setToolbar:toolbar];
+    } else {
+      [window_ enableWindowButtonsOffset];
+      [window_ setWindowButtonsOffset:NSMakePoint(12, 10)];
+    }
   }
 
   // On macOS the initial window size doesn't include window frame.
@@ -619,6 +708,7 @@ NativeWindowMac::~NativeWindowMac() {
 void NativeWindowMac::Close() {
   // When this is a sheet showing, performClose won't work.
   if (is_modal() && parent() && IsVisible()) {
+    [parent()->GetNativeWindow() endSheet:window_];
     CloseImmediately();
     return;
   }
@@ -920,8 +1010,8 @@ bool NativeWindowMac::IsKiosk() {
 
 void NativeWindowMac::SetBackgroundColor(const std::string& color_name) {
   SkColor color = ParseHexColor(color_name);
-  base::ScopedCFTypeRef<CGColorRef> cgcolor =
-      skia::CGColorCreateFromSkColor(color);
+  base::ScopedCFTypeRef<CGColorRef> cgcolor(
+      skia::CGColorCreateFromSkColor(color));
   [[[window_ contentView] layer] setBackgroundColor:cgcolor];
 
   const auto view = web_contents()->GetRenderWidgetHostView();

@@ -75,6 +75,27 @@ describe('<webview> tag', function () {
       webview.src = 'file://' + fixtures + '/pages/a.html'
       document.body.appendChild(webview)
     })
+
+    it('resolves relative URLs', function (done) {
+      var listener = function (e) {
+        assert.equal(e.message, 'Window script is loaded before preload script')
+        webview.removeEventListener('console-message', listener)
+        done()
+      }
+      webview.addEventListener('console-message', listener)
+      webview.src = '../fixtures/pages/e.html'
+      document.body.appendChild(webview)
+    })
+
+    it('ignores empty values', function () {
+      assert.equal(webview.src, '')
+      webview.src = ''
+      assert.equal(webview.src, '')
+      webview.src = null
+      assert.equal(webview.src, '')
+      webview.src = undefined
+      assert.equal(webview.src, '')
+    })
   })
 
   describe('nodeintegration attribute', function () {
@@ -197,6 +218,28 @@ describe('<webview> tag', function () {
       webview.setAttribute('preload', fixtures + '/module/preload.js')
       webview.src = 'file://' + fixtures + '/pages/base-page.html'
       document.body.appendChild(webview)
+    })
+
+    it('resolves relative URLs', function (done) {
+      var listener = function (e) {
+        assert.equal(e.message, 'function object object')
+        webview.removeEventListener('console-message', listener)
+        done()
+      }
+      webview.addEventListener('console-message', listener)
+      webview.src = 'file://' + fixtures + '/pages/e.html'
+      webview.preload = '../fixtures/module/preload.js'
+      document.body.appendChild(webview)
+    })
+
+    it('ignores empty values', function () {
+      assert.equal(webview.preload, '')
+      webview.preload = ''
+      assert.equal(webview.preload, '')
+      webview.preload = null
+      assert.equal(webview.preload, '')
+      webview.preload = undefined
+      assert.equal(webview.preload, '')
     })
   })
 
@@ -737,25 +780,21 @@ describe('<webview> tag', function () {
 
   describe('found-in-page event', function () {
     it('emits when a request is made', function (done) {
-      var requestId = null
-      var totalMatches = null
-      var activeMatchOrdinal = []
-      var listener = function (e) {
+      let requestId = null
+      let activeMatchOrdinal = []
+      const listener = function (e) {
         assert.equal(e.result.requestId, requestId)
-        if (e.result.finalUpdate) {
-          assert.equal(e.result.matches, 3)
-          totalMatches = e.result.matches
-          listener2()
+        assert.equal(e.result.matches, 3)
+        activeMatchOrdinal.push(e.result.activeMatchOrdinal)
+        if (e.result.activeMatchOrdinal === e.result.matches) {
+          assert.deepEqual(activeMatchOrdinal, [1, 2, 3])
+          webview.stopFindInPage('clearSelection')
+          done()
         } else {
-          activeMatchOrdinal.push(e.result.activeMatchOrdinal)
-          if (e.result.activeMatchOrdinal === totalMatches) {
-            assert.deepEqual(activeMatchOrdinal, [1, 2, 3])
-            webview.stopFindInPage('clearSelection')
-            done()
-          }
+          listener2()
         }
       }
-      var listener2 = function () {
+      const listener2 = function () {
         requestId = webview.findInPage('virtual')
       }
       webview.addEventListener('found-in-page', listener)

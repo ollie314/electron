@@ -14,7 +14,6 @@
 #include "atom/common/native_mate_converters/gurl_converter.h"
 #include "atom/common/native_mate_converters/image_converter.h"
 #include "atom/common/native_mate_converters/string16_converter.h"
-#include "atom/common/node_includes.h"
 #include "atom/common/options_switches.h"
 #include "base/command_line.h"
 #include "content/public/browser/render_process_host.h"
@@ -30,6 +29,8 @@
 #if defined(OS_WIN)
 #include "atom/browser/ui/win/taskbar_host.h"
 #endif
+
+#include "atom/common/node_includes.h"
 
 #if defined(OS_WIN)
 namespace mate {
@@ -83,7 +84,6 @@ Window::Window(v8::Isolate* isolate, v8::Local<v8::Object> wrapper,
   v8::Local<v8::Value> transparent;
   if (options.Get("transparent", &transparent))
     web_preferences.Set("transparent", transparent);
-
   // Creates the WebContents used by BrowserWindow.
   auto web_contents = WebContents::Create(isolate, web_preferences);
   web_contents_.Reset(isolate, web_contents.ToV8());
@@ -137,7 +137,7 @@ void Window::WillCloseWindow(bool* prevent_default) {
   *prevent_default = Emit("close");
 }
 
-void Window::WillDestoryNativeObject() {
+void Window::WillDestroyNativeObject() {
   // Close all child windows before closing current window.
   v8::Locker locker(isolate());
   v8::HandleScope handle_scope(isolate());
