@@ -252,6 +252,9 @@ describe('session module', function () {
     var contentDisposition = 'inline; filename="mock.pdf"'
     var downloadFilePath = path.join(fixtures, 'mock.pdf')
     var downloadServer = http.createServer(function (req, res) {
+      if (req.url === '/?testFilename') {
+        contentDisposition = 'inline'
+      }
       res.writeHead(200, {
         'Content-Length': mockPDF.length,
         'Content-Type': 'application/pdf',
@@ -311,6 +314,23 @@ describe('session module', function () {
         ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename) {
           assert.equal(state, 'cancelled')
           assert.equal(filename, 'mock.pdf')
+          assert.equal(mimeType, 'application/pdf')
+          assert.equal(receivedBytes, 0)
+          assert.equal(totalBytes, mockPDF.length)
+          assert.equal(disposition, contentDisposition)
+          done()
+        })
+      })
+    })
+
+    it('can generate a default filename', function (done) {
+      downloadServer.listen(0, '127.0.0.1', function () {
+        var port = downloadServer.address().port
+        ipcRenderer.sendSync('set-download-option', true, false)
+        w.loadURL(url + ':' + port + '/?testFilename')
+        ipcRenderer.once('download-done', function (event, state, url, mimeType, receivedBytes, totalBytes, disposition, filename) {
+          assert.equal(state, 'cancelled')
+          assert.equal(filename, 'download.pdf')
           assert.equal(mimeType, 'application/pdf')
           assert.equal(receivedBytes, 0)
           assert.equal(totalBytes, mockPDF.length)
@@ -399,6 +419,57 @@ describe('session module', function () {
           assert.equal(proxy, 'DIRECT')
           done()
         })
+      })
+    })
+  })
+
+  describe('ses.getblobData(identifier, callback)', function () {
+    it('returns blob data for uuid', function (done) {
+      const scheme = 'temp'
+      const protocol = session.defaultSession.protocol
+      const url = scheme + '://host'
+      before(function () {
+        if (w != null) w.destroy()
+        w = new BrowserWindow({show: false})
+      })
+
+      after(function (done) {
+        protocol.unregisterProtocol(scheme, () => {
+          closeWindow(w).then(() => {
+            w = null
+            done()
+          })
+        })
+      })
+
+      const postData = JSON.stringify({
+        type: 'blob',
+        value: 'hello'
+      })
+      const content = `<html>
+                       <script>
+                       const {webFrame} = require('electron')
+                       webFrame.registerURLSchemeAsPrivileged('${scheme}')
+                       let fd = new FormData();
+                       fd.append('file', new Blob(['${postData}'], {type:'application/json'}));
+                       fetch('${url}', {method:'POST', body: fd });
+                       </script>
+                       </html>`
+
+      protocol.registerStringProtocol(scheme, function (request, callback) {
+        if (request.method === 'GET') {
+          callback({data: content, mimeType: 'text/html'})
+        } else if (request.method === 'POST') {
+          let uuid = request.uploadData[1].blobUUID
+          assert(uuid)
+          session.defaultSession.getBlobData(uuid, function (result) {
+            assert.equal(result.toString(), postData)
+            done()
+          })
+        }
+      }, function (error) {
+        if (error) return done(error)
+        w.loadURL(url)
       })
     })
   })
