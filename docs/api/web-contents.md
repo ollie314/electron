@@ -203,7 +203,12 @@ are clicked or when the DOM `hashchange` event is triggered.
 
 #### Event: 'crashed'
 
-Emitted when the renderer process has crashed.
+Returns:
+
+* `event` Event
+* `killed` Boolean
+
+Emitted when the renderer process crashes or is killed.
 
 #### Event: 'plugin-crashed'
 
@@ -1145,6 +1150,11 @@ Only values between 1 and 60 are accepted.
 #### `contents.getFrameRate()`
 
 If *offscreen rendering* is enabled returns the current frame rate.
+
+#### `contents.invalidate()`
+
+If *offscreen rendering* is enabled invalidates the frame and generates a new
+one through the `'paint'` event.
 
 ### Instance Properties
 
