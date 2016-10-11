@@ -799,6 +799,7 @@ Returns `Boolean` - 현재 데스크톱 환경이 Unity 인지 여부.
 ### `app.getLoginItemSettings()` _macOS_ _Windows_
 
 Returns `Object`:
+
 * `openAtLogin` Boolean - 앱이 로그인시 열리도록 설정되어있는 경우 `true`를 반환.
 * `openAsHidden` Boolean - 앱이 로구인시 숨겨진 채로 열리도록 설정되어있는 경우
   `true`를 반환. 이 설정은 macOS에서만 지원됩니다.
@@ -836,6 +837,18 @@ Returns `Boolean` - Chrome의 접근성 지원이 활성화되어있으면 `true
 않다면 `false`를 반환합니다. 이 API는 사용할 수 있는 스크린 리더와 같은 접근성
 기술이 감지되었을 때 `true`를 반환합니다. 자세한 내용은
 https://www.chromium.org/developers/design-documents/accessibility 를 참고하세요.
+
+### `app.setAboutPanelOptions(options)` _macOS_
+
+* `options` Object
+  * `ApplicationName` String (optional) - 앱 이름.
+  * `ApplicationVersion` String (optional) - 앱 버전.
+  * `Copyright` String (optional) - 저작권 정보.
+  * `Credits` String (optional) - 크레딧 정보.
+  * `Version` String (optional) - 앱 빌드 버전 숫자.
+
+정보 패널의 옵션을 설정합니다. 앱의 `.plist` 에 정의된 값보다 우선합니다. 자세한
+내용은 [애플 문서][about-panel-options]를 참조하세요.
 
 ### `app.commandLine.appendSwitch(switch[, value])`
 
@@ -925,3 +938,4 @@ dock 아이콘의 `image`를 설정합니다.
 [activity-type]: https://developer.apple.com/library/ios/documentation/Foundation/Reference/NSUserActivity_Class/index.html#//apple_ref/occ/instp/NSUserActivity/activityType
 [unity-requiremnt]: ../tutorial/desktop-environment-integration.md#unity-launcher-shortcuts-linux
 [JumpListBeginListMSDN]: https://msdn.microsoft.com/en-us/library/windows/desktop/dd378398(v=vs.85).aspx
+[about-panel-options]: https://developer.apple.com/reference/appkit/nsapplication/1428479-orderfrontstandardaboutpanelwith?language=objc
