@@ -941,6 +941,7 @@ Returns `Boolean` - 윈도우의 문서가 변경되었는지 여부.
 
 * `rect` [Rectangle](structures/rectangle.md) (optional) - 캡쳐될 페이지의 영역
 * `callback` Function
+  * `image` [NativeImage](native-image.md)
 
 `webContents.capturePage([rect, ]callback)`와 같습니다.
 
@@ -1098,7 +1099,7 @@ Returns `Boolean` - 버튼이 성공적으로 추가되었는지 여부
 
 Returns `Boolean` - 메뉴 막대 자동 숨김 상태 여부.
 
-#### `win.setMenuBarVisibility(visible)`
+#### `win.setMenuBarVisibility(visible)` _Windows_ _Linux_
 
 * `visible` Boolean
 
