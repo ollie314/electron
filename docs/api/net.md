@@ -2,8 +2,10 @@
 
 > Issue HTTP/HTTPS requests using Chromium's native networking library
 
+Process: [Main](../tutorial/quick-start.md#main-process)
+
 The `net` module is a client-side API for issuing HTTP(S) requests. It is
-similar to the  [HTTP](https://nodejs.org/api/http.html)  and
+similar to the [HTTP](https://nodejs.org/api/http.html) and
 [HTTPS](https://nodejs.org/api/https.html) modules of Node.js but uses
 Chromium's native networking library instead of the Node.js implementation,
 offering better support for web proxies.
@@ -12,12 +14,12 @@ The following is a non-exhaustive list of why you may consider using the `net`
 module instead of the native Node.js modules:
 
 * Automatic management of system proxy configuration, support of the wpad
-protocol and proxy pac configuration files.
+  protocol and proxy pac configuration files.
 * Automatic tunneling of HTTPS requests.
 * Support for authenticating proxies using basic, digest, NTLM, Kerberos or
-negotiate authentication schemes.
+  negotiate authentication schemes.
 * Support for traffic monitoring proxies: Fiddler-like proxies used for access
-control and monitoring.
+  control and monitoring.
 
 The `net` module API has been specifically designed to mimic, as closely as
 possible, the familiar Node.js API. The API components including classes,
@@ -72,28 +74,30 @@ specified protocol scheme in the `options` object.
 
 > Make HTTP/HTTPS requests.
 
+Process: [Main](../tutorial/quick-start.md#main-process)
+
 `ClientRequest` implements the [Writable Stream](https://nodejs.org/api/stream.html#stream_writable_streams)
 interface and is therefore an [EventEmitter](https://nodejs.org/api/events.html#events_class_eventemitter).
 
 ### `new ClientRequest(options)`
 
 * `options` (Object | String) - If `options` is a String, it is interpreted as
-the request URL. If it is an object, it is expected to fully specify an HTTP request via the
-following properties:
+  the request URL. If it is an object, it is expected to fully specify an HTTP
+  request via the following properties:
   * `method` String (optional) - The HTTP request method. Defaults to the GET
-method.
+    method.
   * `url` String (optional) - The request URL. Must be provided in the absolute
-form with the protocol scheme specified as http or https.
+    form with the protocol scheme specified as http or https.
   * `session` Object (optional) - The [`Session`](session.md) instance with
-which the request is associated.
+    which the request is associated.
   * `partition` String (optional) - The name of the [`partition`](session.md)
-  with which the request is associated. Defaults to the empty string. The
-`session` option prevails on `partition`. Thus if a `session` is explicitly
-specified, `partition` is ignored.
+    with which the request is associated. Defaults to the empty string. The
+    `session` option prevails on `partition`. Thus if a `session` is explicitly
+    specified, `partition` is ignored.
   * `protocol` String (optional) - The protocol scheme in the form 'scheme:'.
-Currently supported values are 'http:' or 'https:'. Defaults to 'http:'.
+    Currently supported values are 'http:' or 'https:'. Defaults to 'http:'.
   * `host` String (optional) - The server host provided as a concatenation of
-the hostname and the port number 'hostname:port'
+    the hostname and the port number 'hostname:port'
   * `hostname` String (optional) - The server host name.
   * `port` Integer (optional) - The server's listening port number.
   * `path` String (optional) - The path part of the request URL.
@@ -104,7 +108,7 @@ strictly follow the Node.js model as described in the
 
 For instance, we could have created the same request to 'github.com' as follows:
 
-```JavaScript
+```javascript
 const request = net.request({
   method: 'GET',
   protocol: 'https:',
@@ -141,17 +145,18 @@ The `callback` function is expected to be called back with user credentials:
 * `username` String
 * `password` String
 
-```JavaScript
+```javascript
 request.on('login', (authInfo, callback) => {
   callback('username', 'password')
 })
 ```
+
 Providing empty credentials will cancel the request and report an authentication
 error on the response object:
 
-```JavaScript
+```javascript
 request.on('response', (response) => {
-  console.log(`STATUS: ${response.statusCode}`);
+  console.log(`STATUS: ${response.statusCode}`)
   response.on('error', (error) => {
     console.log(`ERROR: ${JSON.stringify(error)}`)
   })
@@ -228,10 +233,10 @@ before first write. Trying to call it after the first write will throw an error.
 #### `request.write(chunk[, encoding][, callback])`
 
 * `chunk` (String | Buffer) - A chunk of the request body's data. If it is a
-string, it is converted into a Buffer using the specified encoding.
+  string, it is converted into a Buffer using the specified encoding.
 * `encoding` String (optional) - Used to convert string chunks into Buffer
-objects. Defaults to 'utf-8'.
-* `callback` Function (optional) - Called after the write operation ends.  
+  objects. Defaults to 'utf-8'.
+* `callback` Function (optional) - Called after the write operation ends.
 
 `callback` is essentially a dummy function introduced in the purpose of keeping
 similarity with the Node.js API. It is called asynchronously in the next tick
@@ -259,10 +264,11 @@ Cancels an ongoing HTTP transaction. If the request has already emitted the
 event will emit `abort` and `close` events. Additionally, if there is an ongoing
 response object,it will emit the `aborted` event.
 
-
 ## Class: IncomingMessage
 
 > Handle responses to HTTP/HTTPS requests.
+
+Process: [Main](../tutorial/quick-start.md#main-process)
 
 `IncomingMessage` implements the [Readable Stream](https://nodejs.org/api/stream.html#stream_readable_streams)
 interface and is therefore an [EventEmitter](https://nodejs.org/api/events.html#events_class_eventemitter).

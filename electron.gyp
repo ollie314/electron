@@ -4,7 +4,7 @@
     'product_name%': 'Electron',
     'company_name%': 'GitHub, Inc',
     'company_abbr%': 'github',
-    'version%': '1.4.4',
+    'version%': '1.4.6',
     'js2c_input_dir': '<(SHARED_INTERMEDIATE_DIR)/js2c',
   },
   'includes': [
@@ -436,10 +436,6 @@
           'action_name': 'atom_browserify',
           'inputs': [
             '<@(browserify_entries)',
-            # Any js file under `lib/` can be included in the preload bundle.
-            # Add all js sources as dependencies so any change to a js file will
-            # trigger a rebuild of the bundle(and consequently of js2c).
-            '<@(js_sources)',
           ],
           'outputs': [
             '<(js2c_input_dir)/preload_bundle.js',
@@ -447,9 +443,10 @@
           'action': [
             'npm',
             'run',
+            '--silent',
             'browserify',
             '--',
-            '<@(browserify_entries)',
+            'lib/sandboxed_renderer/init.js',
             '-o',
             '<@(_outputs)',
           ],
