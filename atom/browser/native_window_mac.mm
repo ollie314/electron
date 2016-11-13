@@ -311,6 +311,7 @@ bool ScopedDisableResize::disable_resize_ = false;
 @property BOOL disableKeyOrMainWindow;
 @property NSPoint windowButtonsOffset;
 @property (nonatomic, retain) AtomPreviewItem* quickLookItem;
+@property (nonatomic, retain) NSView* vibrantView;
 
 - (void)setShell:(atom::NativeWindowMac*)shell;
 - (void)setEnableLargerThanScreen:(bool)enable;
@@ -742,6 +743,11 @@ NativeWindowMac::NativeWindowMac(
   }];
 
   InstallView();
+
+  std::string type;
+  if (options.Get(options::kVibrancyType, &type)) {
+    SetVibrancy(type);
+  }
 
   // Set maximizable state last to ensure zoom button does not get reset
   // by calls to other APIs.
@@ -1203,6 +1209,65 @@ void NativeWindowMac::SetVisibleOnAllWorkspaces(bool visible) {
 bool NativeWindowMac::IsVisibleOnAllWorkspaces() {
   NSUInteger collectionBehavior = [window_ collectionBehavior];
   return collectionBehavior & NSWindowCollectionBehaviorCanJoinAllSpaces;
+}
+
+void NativeWindowMac::SetVibrancy(const std::string& type) {
+  if (!(base::mac::IsOSMavericks() || base::mac::IsOSYosemiteOrLater())) return;
+
+  NSView* vibrant_view = [window_ vibrantView];
+
+  if (type.empty()) {
+    if (vibrant_view == nil) return;
+
+    [vibrant_view removeFromSuperview];
+    [window_ setVibrantView:nil];
+
+    return;
+  }
+
+  NSVisualEffectView* effect_view = (NSVisualEffectView*)vibrant_view;
+  if (effect_view == nil) {
+    effect_view = [[[NSVisualEffectView alloc]
+        initWithFrame: [[window_ contentView] bounds]] autorelease];
+    [window_ setVibrantView:(NSView*)effect_view];
+
+    [effect_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [effect_view setBlendingMode:NSVisualEffectBlendingModeBehindWindow];
+    [effect_view setState:NSVisualEffectStateActive];
+    [[window_ contentView] addSubview:effect_view
+                           positioned:NSWindowBelow
+                           relativeTo:nil];
+  }
+
+  NSVisualEffectMaterial vibrancyType = NSVisualEffectMaterialLight;
+
+  if (type == "appearance-based") {
+    vibrancyType = NSVisualEffectMaterialAppearanceBased;
+  } else if (type == "light") {
+    vibrancyType = NSVisualEffectMaterialLight;
+  } else if (type == "dark") {
+    vibrancyType = NSVisualEffectMaterialDark;
+  } else if (type == "titlebar") {
+    vibrancyType = NSVisualEffectMaterialTitlebar;
+  }
+
+  if (base::mac::IsOSYosemiteOrLater()) {
+    if (type == "selection") {
+      vibrancyType = NSVisualEffectMaterialSelection;
+    } else if (type == "menu") {
+      vibrancyType = NSVisualEffectMaterialMenu;
+    } else if (type == "popover") {
+      vibrancyType = NSVisualEffectMaterialPopover;
+    } else if (type == "sidebar") {
+      vibrancyType = NSVisualEffectMaterialSidebar;
+    } else if (type == "medium-light") {
+      vibrancyType = NSVisualEffectMaterialMediumLight;
+    } else if (type == "ultra-dark") {
+      vibrancyType = NSVisualEffectMaterialUltraDark;
+    }
+  }
+
+  [effect_view setMaterial:vibrancyType];
 }
 
 void NativeWindowMac::OnInputEvent(const blink::WebInputEvent& event) {
